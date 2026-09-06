@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using Avalonia.Projection.Generator;
 using Avalonia.Projection.Ir;
@@ -11,7 +11,7 @@ if (args.Length == 2 && args[0] == "--normalize")
 {
     var file = Path.GetFullPath(args[1]);
     var normalized = ViewModelIr.FromJson(File.ReadAllText(file));
-    File.WriteAllText(file, normalized.ToJson() + Environment.NewLine);
+    File.WriteAllText(file, normalized.ToJson().Replace(Environment.NewLine, "\n") + "\n");
     Console.WriteLine($"Normalized {file}.");
     return 0;
 }
@@ -45,10 +45,10 @@ foreach (var (name, source) in ViewModelSourceEmitter.EmitCSharp(ir))
     var directory = name == "RustViewRegistry.g.cs"
         ? registryDirectory
         : adapterDirectory;
-    File.WriteAllText(Path.Combine(directory, name), source);
+    File.WriteAllText(Path.Combine(directory, name), source.Replace(Environment.NewLine, "\n"));
 }
-File.WriteAllText(rustPath, ViewModelSourceEmitter.EmitRust(ir, externalRust));
-File.WriteAllText(contractPath, ViewModelSourceEmitter.EmitContract(ir));
+File.WriteAllText(rustPath, ViewModelSourceEmitter.EmitRust(ir, externalRust).Replace(Environment.NewLine, "\n"));
+File.WriteAllText(contractPath, ViewModelSourceEmitter.EmitContract(ir).Replace(Environment.NewLine, "\n"));
 
 Console.WriteLine(
     $"Generated {ir.Models.Count} view model(s) and {ir.Views.Count} view(s).");

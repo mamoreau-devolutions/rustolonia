@@ -71,7 +71,7 @@ jobs:
       - name: Generate Avalonia.Native COM headers
         if: runner.os == 'macOS'
         shell: pwsh
-        run: dotnet run --project ./avalonia-src/nukebuild/_build.csproj --target GenerateCppHeaders
+        run: dotnet run --project nukebuild/_build.csproj --target GenerateCppHeaders
         working-directory: ./avalonia-src
 
       - name: Build Avalonia.Native for managed tests

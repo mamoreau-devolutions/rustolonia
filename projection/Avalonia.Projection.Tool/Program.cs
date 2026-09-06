@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using Avalonia;
@@ -21,18 +21,18 @@ var csharpDirectory = Path.GetFullPath(args[1]);
 
 Directory.CreateDirectory(Path.GetDirectoryName(irPath)!);
 Directory.CreateDirectory(csharpDirectory);
-File.WriteAllText(irPath, ir.ToJson() + Environment.NewLine);
+File.WriteAllText(irPath, ir.ToJson().Replace(Environment.NewLine, "\n") + "\n");
 
 foreach (var existing in Directory.EnumerateFiles(csharpDirectory, "*.g.cs"))
     File.Delete(existing);
 foreach (var (name, source) in ComSourceEmitter.Emit(ir))
-    File.WriteAllText(Path.Combine(csharpDirectory, name), source);
+    File.WriteAllText(Path.Combine(csharpDirectory, name), source.Replace(Environment.NewLine, "\n"));
 
 if (args.Length == 3)
 {
     var headerPath = Path.GetFullPath(args[2]);
     Directory.CreateDirectory(Path.GetDirectoryName(headerPath)!);
-    File.WriteAllText(headerPath, NativeHeaderEmitter.Emit(ir));
+    File.WriteAllText(headerPath, NativeHeaderEmitter.Emit(ir).Replace(Environment.NewLine, "\n"));
 }
 
 var reportPath = Path.ChangeExtension(irPath, ".gaps.txt");
