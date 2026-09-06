@@ -87,13 +87,14 @@ if ($installed -notcontains $spec.Triple) {
 }
 
 $artifacts = if ($env:AVN_DOTNET_ARTIFACTS) { $env:AVN_DOTNET_ARTIFACTS } else { Join-Path $PSScriptRoot 'target' "dotnet-$Rid" }
-$publishProperties = "-p:AvaloniaRustHostPlatform=$($spec.Platform)"
+$publishProperties = @("-p:AvaloniaRustHostPlatform=$($spec.Platform)")
 if ($IsLinux -and $architecture -ne $nativeArchitecture) {
-    # NativeAOT strips debug symbols with objcopy; the host's x86 binutils cannot
-    # parse arm64 ELF files, so cross-arch Linux packaging uses the cross toolchain's.
+    # NativeAOT strips debug symbols through binutils objcopy; the host's x86
+    # objcopy cannot parse arm64 ELF files, so cross-arch Linux packaging points
+    # ObjCopyName at the cross toolchain's aarch64-linux-gnu-objcopy.
     $crossObjCopy = "aarch64-linux-gnu-objcopy"
     if (Get-Command $crossObjCopy -ErrorAction SilentlyContinue) {
-        $publishProperties += " -p:ObjCopyName=$crossObjCopy"
+        $publishProperties += "-p:ObjCopyName=$crossObjCopy"
     }
     else {
         throw "Cross-building $Rid requires $crossObjCopy on PATH. Install it with: sudo apt-get install gcc-aarch64-linux-gnu"
@@ -101,7 +102,7 @@ if ($IsLinux -and $architecture -ne $nativeArchitecture) {
 }
 Write-Host "==> Publishing Avalonia.Host ($Rid, $Configuration)"
 dotnet publish (Join-Path $repositoryRoot 'host' 'Avalonia.Host.csproj') `
-    -c $Configuration -r $Rid $publishProperties `
+    -c $Configuration -r $Rid @publishProperties `
     --artifacts-path $artifacts
 
 $publishDir = Join-Path $artifacts 'publish' 'Avalonia.Host' "$($Configuration.ToLowerInvariant())_$Rid"
