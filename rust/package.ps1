@@ -42,7 +42,12 @@ if ($IsWindows -and $spec.OS -ne 'Windows') { throw "$Rid packaging must run on 
 if ($IsLinux -and $spec.OS -ne 'Linux') { throw "$Rid packaging must run on Linux." }
 if ($IsMacOS -and $spec.OS -ne 'macOS') { throw "$Rid packaging must run on macOS." }
 if ($architecture -ne $nativeArchitecture) {
-    throw "$Rid packaging requires a runner with a matching $architecture CPU because the package smoke tests execute the Rust binary."
+    # Same-OS cross-architecture packaging (e.g. win-arm64 from an x64 runner) is
+    # supported: dotnet publish cross-compiles the NativeAOT host for the target RID
+    # and cargo builds for the target triple, neither of which executes the target
+    # binaries. Consumers that need to run the packaged sample must do so on matching
+    # hardware; the checksums cover the produced artifacts either way.
+    Write-Warning "$Rid is being cross-built on a $nativeArchitecture runner. The packaged sample cannot be smoke-launched here."
 }
 
 if ($spec.Platform -eq 'X11') {
@@ -53,7 +58,10 @@ if ($spec.Platform -eq 'X11') {
 }
 
 if ($spec.Platform -eq 'OSX') {
-    $xcodeArch = if ($nativeArchitecture -eq 'x64') { 'x86_64' } else { 'arm64' }
+    # Build libAvaloniaNative for the RID's architecture, not the runner's, so
+    # cross-architecture packaging (e.g. osx-x64 from an arm64 runner) publishes a
+    # matching native library.
+    $xcodeArch = if ($architecture -eq 'x64') { 'x86_64' } else { 'arm64' }
     $xcodeProject = Join-Path $avaloniaRoot 'native' 'Avalonia.Native' 'src' 'OSX' 'Avalonia.Native.OSX.xcodeproj'
     $products = Join-Path $avaloniaRoot 'Build' 'Products' 'Release'
     xcodebuild -project $xcodeProject -configuration $Configuration "ARCHS=$xcodeArch" "CONFIGURATION_BUILD_DIR=$products"

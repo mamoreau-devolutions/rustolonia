@@ -17,7 +17,7 @@ namespace Avalonia.Host.Com;
 internal static class AvnPopulatorBridge
 {
     public static async Task RunAsync(
-        Func<string?, CancellationToken, Task<IEnumerable<object?>>> populator,
+        Func<string?, CancellationToken, Task<IEnumerable<object>>> populator,
         long requestId,
         IAvnAsyncPopulatorCompletion completion,
         string? searchText)
@@ -34,16 +34,16 @@ internal static class AvnPopulatorBridge
         }
     }
 
-    public static IEnumerable<object?> Materialize(IAvnVariantList items)
+    public static IEnumerable<object> Materialize(IAvnVariantList items)
     {
         if (items.GetCount(out var count) < 0)
-            return Array.Empty<object?>();
-        var result = new List<object?>(count);
+            return Array.Empty<object>();
+        var result = new List<object>(count);
         for (var index = 0; index < count; index++)
         {
             if (items.GetAt(index, out var variant) < 0)
                 break;
-            result.Add(variant.ToObject());
+            result.Add(variant.ToObject()!);
         }
         return result;
     }

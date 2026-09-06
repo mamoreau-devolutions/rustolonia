@@ -882,7 +882,7 @@ public static class ComSourceEmitter
         sb.AppendLine("                global::System.Runtime.InteropServices.Marshal.ThrowExceptionForHR(hr);");
         sb.AppendLine("            return value != 0;");
         sb.AppendLine("        }");
-        sb.AppendLine("        public new global::Avalonia.Controls.Control? Build()");
+        sb.AppendLine("        public global::Avalonia.Controls.Control? Build()");
         sb.AppendLine("        {");
         sb.AppendLine("            var hr = _inner.Build(out var value);");
         sb.AppendLine("            if (hr < 0)");
@@ -936,7 +936,7 @@ public static class ComSourceEmitter
             sb.AppendLine();
             sb.AppendLine("    public int Invoke(string? search, AvnVariant item, out int result)");
             sb.AppendLine("    {");
-            sb.AppendLine("        result = _value(search, item.ToObject()) ? 1 : 0;");
+            sb.AppendLine("        result = _value(search, item.ToObject()!) ? 1 : 0;");
             sb.AppendLine("        return global::Avalonia.Host.HResults.S_OK;");
             sb.AppendLine("    }");
             sb.AppendLine("}");
@@ -1029,7 +1029,7 @@ public static class ComSourceEmitter
             sb.AppendLine();
             sb.AppendLine("    public int Invoke(string? search, AvnVariant item, out string? text)");
             sb.AppendLine("    {");
-            sb.AppendLine("        text = _value(search, item.ToObject());");
+            sb.AppendLine("        text = _value(search, item.ToObject()!);");
             sb.AppendLine("        return global::Avalonia.Host.HResults.S_OK;");
             sb.AppendLine("    }");
             sb.AppendLine("}");
@@ -1111,21 +1111,21 @@ public static class ComSourceEmitter
         sb.AppendLine("[GeneratedComClass]");
         sb.AppendLine($"public sealed partial class AvnAsyncPopulator : {interfaceName}");
         sb.AppendLine("{");
-        sb.AppendLine("    private readonly global::System.Func<string?, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<global::System.Collections.Generic.IEnumerable<object?>>>? _value;");
+        sb.AppendLine("    private readonly global::System.Func<string?, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<global::System.Collections.Generic.IEnumerable<object>>>? _value;");
         sb.AppendLine();
-        sb.AppendLine("    public AvnAsyncPopulator(global::System.Func<string?, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<global::System.Collections.Generic.IEnumerable<object?>>>? value) => _value = value;");
+        sb.AppendLine("    public AvnAsyncPopulator(global::System.Func<string?, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<global::System.Collections.Generic.IEnumerable<object>>>? value) => _value = value;");
         sb.AppendLine();
-        sb.AppendLine($"    public static {interfaceName}? FromPopulator(global::System.Func<string?, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<global::System.Collections.Generic.IEnumerable<object?>>>? value) =>");
+        sb.AppendLine($"    public static {interfaceName}? FromPopulator(global::System.Func<string?, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<global::System.Collections.Generic.IEnumerable<object>>>? value) =>");
         sb.AppendLine("        value is null ? null : new AvnAsyncPopulator(value);");
         sb.AppendLine();
-        sb.AppendLine($"    public static global::System.Func<string?, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<global::System.Collections.Generic.IEnumerable<object?>>>? ToPopulator({interfaceName}? value) =>");
+        sb.AppendLine($"    public static global::System.Func<string?, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<global::System.Collections.Generic.IEnumerable<object>>>? ToPopulator({interfaceName}? value) =>");
         sb.AppendLine("        value switch");
         sb.AppendLine("        {");
         sb.AppendLine("            null => null,");
         sb.AppendLine("            AvnAsyncPopulator local => local._value,");
         sb.AppendLine("            _ => (searchText, cancellationToken) =>");
         sb.AppendLine("            {");
-        sb.AppendLine("                var source = new global::System.Threading.Tasks.TaskCompletionSource<global::System.Collections.Generic.IEnumerable<object?>>(global::System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);");
+        sb.AppendLine("                var source = new global::System.Threading.Tasks.TaskCompletionSource<global::System.Collections.Generic.IEnumerable<object>>(global::System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);");
         sb.AppendLine("                var completion = new AvnPopulatorCompletion(source);");
         sb.AppendLine("                var hr = value.BeginPopulate(completion.RequestId, completion, searchText);");
         sb.AppendLine("                if (hr < 0)");
@@ -1154,12 +1154,12 @@ public static class ComSourceEmitter
         sb.AppendLine("[GeneratedComClass]");
         sb.AppendLine($"public sealed partial class AvnPopulatorCompletion : {completionName}");
         sb.AppendLine("{");
-        sb.AppendLine("    private readonly global::System.Threading.Tasks.TaskCompletionSource<global::System.Collections.Generic.IEnumerable<object?>> _source;");
+        sb.AppendLine("    private readonly global::System.Threading.Tasks.TaskCompletionSource<global::System.Collections.Generic.IEnumerable<object>> _source;");
         sb.AppendLine("    public long RequestId { get; }");
         sb.AppendLine();
         sb.AppendLine("    private static long s_nextRequestId;");
         sb.AppendLine();
-        sb.AppendLine("    public AvnPopulatorCompletion(global::System.Threading.Tasks.TaskCompletionSource<global::System.Collections.Generic.IEnumerable<object?>> source)");
+        sb.AppendLine("    public AvnPopulatorCompletion(global::System.Threading.Tasks.TaskCompletionSource<global::System.Collections.Generic.IEnumerable<object>> source)");
         sb.AppendLine("    {");
         sb.AppendLine("        _source = source;");
         sb.AppendLine("        RequestId = global::System.Threading.Interlocked.Increment(ref s_nextRequestId);");
@@ -1173,11 +1173,11 @@ public static class ComSourceEmitter
         sb.AppendLine("                return global::Avalonia.Host.HResults.E_INVALIDARG;");
         sb.AppendLine("            if (hresult < 0)");
         sb.AppendLine("            {");
-        sb.AppendLine("                _source.SetException(global::System.Runtime.InteropServices.Marshal.GetExceptionForHR(hresult));");
+        sb.AppendLine("                _source.SetException(global::System.Runtime.InteropServices.Marshal.GetExceptionForHR(hresult) ?? new global::System.Runtime.InteropServices.COMException(null, hresult));");
         sb.AppendLine("                return global::Avalonia.Host.HResults.S_OK;");
         sb.AppendLine("            }");
         sb.AppendLine("            var list = items is null");
-        sb.AppendLine("                ? global::System.Array.Empty<object?>()");
+        sb.AppendLine("                ? global::System.Array.Empty<object>()");
         sb.AppendLine("                : global::Avalonia.Host.Com.AvnPopulatorBridge.Materialize(items);");
         sb.AppendLine("            _source.SetResult(list);");
         sb.AppendLine("            return global::Avalonia.Host.HResults.S_OK;");
@@ -1347,7 +1347,9 @@ public static class ComSourceEmitter
         sb.AppendLine($"    int GetOnClose(out {handlerName}? value);");
         sb.AppendLine("}");
         sb.AppendLine();
-        sb.AppendLine("[GeneratedComClass]");
+        // The adapter implements the managed INotification only; it is never marshaled
+        // as a COM class (the ABI-side notification is IAvnNotification), so
+        // GeneratedComClass would be incorrect here (SYSLIB1095).
         sb.AppendLine($"public sealed partial class {className} : global::Avalonia.Controls.Notifications.INotification");
         sb.AppendLine("{");
         sb.AppendLine($"    private readonly {interfaceName} _inner;");
@@ -1609,10 +1611,9 @@ public static class ComSourceEmitter
         var readElement = elementKind switch
         {
             MarshallingKind.ComInterface =>
-                $"({elementName})ProjectionRuntime.Wrap((global::{managedElementName})_value[index]!)!",
+                $"({elementName})ProjectionRuntime.Wrap((global::{managedElementName})_value[index]!)",
             _ => "_value[index]",
         };
-        var elementNullableSuffix = elementKind == MarshallingKind.ComInterface ? "?" : "";
         var writeElement = elementKind switch
         {
             MarshallingKind.ComInterface =>
@@ -1628,13 +1629,13 @@ public static class ComSourceEmitter
         sb.AppendLine("    int GetCount(out int value);");
         sb.AppendLine();
         sb.AppendLine("    [PreserveSig]");
-        sb.AppendLine($"    int GetAt(int index, out {elementName}{elementNullableSuffix} value);");
+        sb.AppendLine($"    int GetAt(int index, out {elementName} value);");
         sb.AppendLine();
         sb.AppendLine("    [PreserveSig]");
-        sb.AppendLine($"    int Add({elementName}{elementNullableSuffix} value);");
+        sb.AppendLine($"    int Add({elementName} value);");
         sb.AppendLine();
         sb.AppendLine("    [PreserveSig]");
-        sb.AppendLine($"    int IndexOf({elementName}{elementNullableSuffix} value, out int index);");
+        sb.AppendLine($"    int IndexOf({elementName} value, out int index);");
         sb.AppendLine();
         sb.AppendLine("    [PreserveSig]");
         sb.AppendLine("    int RemoveAt(int index);");
@@ -1682,7 +1683,7 @@ public static class ComSourceEmitter
         EmitCollectionMethod(
             sb,
             "GetAt",
-            $"int index, out {elementName}{elementNullableSuffix} value",
+            $"int index, out {elementName} value",
             $"value = {readElement};",
             initializeOut: elementKind == MarshallingKind.StringUtf16
                 ? "value = string.Empty;"
@@ -1690,12 +1691,12 @@ public static class ComSourceEmitter
         EmitCollectionMethod(
             sb,
             "Add",
-            $"{elementName}{elementNullableSuffix} value",
+            $"{elementName} value",
             $"_value.Add({writeElement});");
         EmitCollectionMethod(
             sb,
             "IndexOf",
-            $"{elementName}{elementNullableSuffix} value, out int index",
+            $"{elementName} value, out int index",
             $"index = _value.IndexOf({writeElement});",
             initializeOut: "index = -1;");
         EmitCollectionMethod(sb, "RemoveAt", "int index", "_value.RemoveAt(index);");
@@ -1763,9 +1764,7 @@ public static class ComSourceEmitter
             };
             sb.AppendLine($"    public int Get{property.Name}(IAvnControl? target, out {type} value)");
             sb.AppendLine("    {");
-            sb.AppendLine(property.Kind == MarshallingKind.StringUtf16
-                ? "        value = default!;"
-                : "        value = default;");
+            sb.AppendLine($"        {(property.Kind == MarshallingKind.StringUtf16 && !property.IsNullable ? "value = string.Empty;" : "value = default;")}");
             sb.AppendLine("        if (target is null)");
             sb.AppendLine("            return global::Avalonia.Host.HResults.E_POINTER;");
             sb.AppendLine("        try");
@@ -1834,6 +1833,10 @@ public static class ComSourceEmitter
         var sb = new StringBuilder();
         sb.AppendLine("// <auto-generated />");
         sb.AppendLine("#nullable enable");
+        // The projection intentionally surfaces members the managed API marks
+        // [Obsolete] (e.g. TableView.ItemTemplate) so the full control surface stays
+        // reachable; the generated wrappers would otherwise warn on every build.
+        sb.AppendLine("#pragma warning disable CS0618");
         sb.AppendLine("using System.Runtime.InteropServices;");
         sb.AppendLine("using System.Runtime.InteropServices.Marshalling;");
         sb.AppendLine();
@@ -1885,7 +1888,7 @@ public static class ComSourceEmitter
             sb.AppendLine();
             sb.AppendLine($"    public int Get{property.Name}(out {type} value)");
             sb.AppendLine("    {");
-            sb.AppendLine("        value = default!;");
+            sb.AppendLine($"        {OutInitializer(property, type)}");
             sb.AppendLine("        try");
             sb.AppendLine("        {");
             sb.AppendLine("            using var call = _state.EnterCall();");
@@ -1927,7 +1930,7 @@ public static class ComSourceEmitter
         sb.AppendLine($"    public int {method.Name}({string.Join(", ", method.Parameters.Select(FormatParameter))})");
         sb.AppendLine("    {");
         foreach (var output in outs)
-            sb.AppendLine($"        {output.Name} = default!;");
+            sb.AppendLine($"        {output.Name} = {(output.Kind == MarshallingKind.StringUtf16 && !output.IsNullable ? "string.Empty" : "default")};");
         sb.AppendLine("        try");
         sb.AppendLine("        {");
         sb.AppendLine("            using var call = _state.EnterCall();");
@@ -2027,7 +2030,11 @@ public static class ComSourceEmitter
             MarshallingKind.I32 when property.ManagedTypeName is not "System.Int32" =>
                 $"(int)_value.{property.Name}",
             MarshallingKind.StringUtf16 when property.StringConverterTypeName is { } converter =>
-                $"global::{converter}.ToAbi(_value.{property.Name})",
+                property.IsNullable
+                    ? $"global::{converter}.ToAbi(_value.{property.Name})"
+                    // The converter encodes null as a null string, but the ABI member
+                    // is non-nullable; the property's value is always encodable.
+                    : $"global::{converter}.ToAbi(_value.{property.Name})!",
             MarshallingKind.StringUtf16 when property.ManagedTypeName is not "System.String" =>
                 property.IsNullable
                     ? $"_value.{property.Name}?.ToString()"
@@ -2114,7 +2121,11 @@ public static class ComSourceEmitter
             MarshallingKind.I32 when property.ManagedTypeName is not "System.Int32" =>
                 $"(global::{property.ManagedTypeName})value",
             MarshallingKind.StringUtf16 when property.StringConverterTypeName is { } converter =>
-                $"global::{converter}.FromAbi(value)",
+                property.IsNullable
+                    ? $"global::{converter}.FromAbi(value)"
+                    // A null ABI value for a non-nullable managed property is a caller
+                    // contract violation; the converter would surface it as null anyway.
+                    : $"global::{converter}.FromAbi(value)!",
             MarshallingKind.StringUtf16 when property.ManagedTypeName is not "System.String" =>
                 property.IsNullable
                     ? $"value is null ? null : global::{property.ManagedTypeName}.Parse(value)"
@@ -2128,15 +2139,15 @@ public static class ComSourceEmitter
                 "value switch { -1 => null, 0 => false, 1 => true, _ => throw new global::System.ArgumentOutOfRangeException(nameof(value)) }",
             MarshallingKind.ComInterface =>
                 $"(global::{property.ManagedTypeName})ProjectionRuntime.Unwrap(value)!",
-            MarshallingKind.Brush => $"{SimpleName(property.InterfaceName!)[1..]}.ToBrush(value)",
-            MarshallingKind.Command => $"{SimpleName(property.InterfaceName!)[1..]}.ToCommand(value)",
-            MarshallingKind.DataTemplate => $"{SimpleName(property.InterfaceName!)[1..]}.ToTemplate(value)",
-            MarshallingKind.ItemFilter => $"{SimpleName(property.InterfaceName!)[1..]}.ToPredicate(value)",
-            MarshallingKind.TextFilter => $"{SimpleName(property.InterfaceName!)[1..]}.ToPredicate(value)",
-            MarshallingKind.ItemSelector => $"{SimpleName(property.InterfaceName!)[1..]}.ToSelector(value)",
-            MarshallingKind.TextSelector => $"{SimpleName(property.InterfaceName!)[1..]}.ToSelector(value)",
-            MarshallingKind.PopupPlacement => $"{SimpleName(property.InterfaceName!)[1..]}.ToCallback(value)",
-            MarshallingKind.AsyncPopulator => $"{SimpleName(property.InterfaceName!)[1..]}.ToPopulator(value)",
+            MarshallingKind.Brush => NullForgiving($"{SimpleName(property.InterfaceName!)[1..]}.ToBrush(value)", property),
+            MarshallingKind.Command => NullForgiving($"{SimpleName(property.InterfaceName!)[1..]}.ToCommand(value)", property),
+            MarshallingKind.DataTemplate => NullForgiving($"{SimpleName(property.InterfaceName!)[1..]}.ToTemplate(value)", property),
+            MarshallingKind.ItemFilter => NullForgiving($"{SimpleName(property.InterfaceName!)[1..]}.ToPredicate(value)", property),
+            MarshallingKind.TextFilter => NullForgiving($"{SimpleName(property.InterfaceName!)[1..]}.ToPredicate(value)", property),
+            MarshallingKind.ItemSelector => NullForgiving($"{SimpleName(property.InterfaceName!)[1..]}.ToSelector(value)", property),
+            MarshallingKind.TextSelector => NullForgiving($"{SimpleName(property.InterfaceName!)[1..]}.ToSelector(value)", property),
+            MarshallingKind.PopupPlacement => NullForgiving($"{SimpleName(property.InterfaceName!)[1..]}.ToCallback(value)", property),
+            MarshallingKind.AsyncPopulator => NullForgiving($"{SimpleName(property.InterfaceName!)[1..]}.ToPopulator(value)", property),
             MarshallingKind.Variant => "value.ToObject()",
             MarshallingKind.ComCollection => property.HostImplementationTypeName is { }
                 ? $"(global::{CSharpManagedTypeName(property.ManagedTypeName)}?)({SimpleName(property.InterfaceName!)[1..]}Marshal.ToManaged(value))!"
@@ -2145,13 +2156,31 @@ public static class ComSourceEmitter
             _ => "value",
         };
 
+    /// <summary>
+    /// The initializer for a getter's out parameter: reference-typed ABI values are
+    /// nullable and initialize to null, while a non-nullable ABI string initializes to
+    /// the empty string so the catch path never reports an uninitialized value.
+    /// </summary>
+    private static string OutInitializer(ProjectedProperty property, string type) =>
+        property.Kind == MarshallingKind.StringUtf16 && !property.IsNullable
+            ? "value = string.Empty;"
+            : "value = default;";
+
+    /// <summary>
+    /// The To* marshalers all return nullable managed values, but a non-nullable
+    /// managed property rejects null; a null ABI value for such a property is a caller
+    /// contract violation, so the assignment carries the null-forgiving operator.
+    /// </summary>
+    private static string NullForgiving(string expression, ProjectedProperty property) =>
+        property.IsNullable ? expression : expression + "!";
+
     private static string MethodReturnExpression(ProjectedParameter output, string call) =>
         output.Kind switch
         {
             MarshallingKind.I32 when output.ManagedTypeName is not "System.Int32" => $"(int){call}",
             MarshallingKind.Bool => $"{call} ? 1 : 0",
             MarshallingKind.ComInterface =>
-                $"({SimpleName(output.InterfaceName!)})ProjectionRuntime.Wrap({call} as global::Avalonia.AvaloniaObject)",
+                $"({SimpleName(output.InterfaceName!)}?)ProjectionRuntime.Wrap({call} as global::Avalonia.AvaloniaObject)",
             MarshallingKind.Variant => $"AvnVariant.FromObject({call})",
             MarshallingKind.Brush =>
                 $"{SimpleName(output.InterfaceName!)[1..]}.FromBrush({call})",
@@ -2172,8 +2201,16 @@ public static class ComSourceEmitter
                 $"{parameter.Name} switch {{ -1 => null, 0 => false, 1 => true, _ => throw new global::System.ArgumentOutOfRangeException(nameof({parameter.Name})) }}",
             MarshallingKind.ComInterface =>
                 $"(global::{parameter.ManagedTypeName})ProjectionRuntime.Unwrap({parameter.Name})!",
-            MarshallingKind.Variant => $"{parameter.Name}.ToObject()",
-            MarshallingKind.Notification => $"{SimpleName(parameter.InterfaceName!)[1..]}.ToNotification({parameter.Name})",
+            MarshallingKind.Variant => parameter.IsNullable
+                ? $"{parameter.Name}.ToObject()"
+                // A null variant for a parameter the managed API demands non-null is a
+                // caller contract violation; the null-forgiving operator documents it.
+                : $"{parameter.Name}.ToObject()!",
+            MarshallingKind.Notification => parameter.IsNullable
+                ? $"{SimpleName(parameter.InterfaceName!)[1..]}.ToNotification({parameter.Name})"
+                // The managed API demands a non-null notification; a null ABI value is
+                // a caller contract violation.
+                : $"{SimpleName(parameter.InterfaceName!)[1..]}.ToNotification({parameter.Name})!",
             _ when GeometryMarshalling.IsGeometry(parameter.Kind) => $"{parameter.Name}.ToAvalonia()",
             _ => parameter.Name,
         };
@@ -2211,9 +2248,10 @@ public static class ComSourceEmitter
             ParameterDirection.InOut => "ref ",
             _ => "",
         };
-        var ty = CSharpType(p.Kind, p.InterfaceName, p.IsNullable && p.Direction != ParameterDirection.Out);
-        if (p.IsNullable && p.Direction == ParameterDirection.Out && p.Kind is MarshallingKind.StringUtf16 or MarshallingKind.ComInterface or MarshallingKind.Brush or MarshallingKind.Command)
-            ty += "?";
+        // Out parameters initialize to default before the call, so a nullable ABI
+        // value must stay nullable even in the out direction; the always-nullable
+        // reference kinds ignore this flag entirely.
+        var ty = CSharpType(p.Kind, p.InterfaceName, p.IsNullable);
         return $"{prefix}{ty} {p.Name}";
     }
 
@@ -2224,6 +2262,12 @@ public static class ComSourceEmitter
     private static string AttachedCSharpType(ProjectedAttachedProperty property) =>
         CSharpType(property.Kind, null, property.IsNullable);
 
+    /// <summary>
+    /// The ABI-side C# type for a member. Reference-typed ABI values (interfaces,
+    /// collections, adapters) are always emitted as nullable: a null reference is a
+    /// valid ABI value meaning "absent", independently of the managed member's
+    /// nullability, and the From* marshalers all return nullable references.
+    /// </summary>
     private static string CSharpType(MarshallingKind kind, string? interfaceName, bool nullable) =>
         kind switch
         {
@@ -2240,18 +2284,18 @@ public static class ComSourceEmitter
             MarshallingKind.TimeSpanI64 => nullable ? "AvnOptionalTimeSpan" : "long",
             MarshallingKind.DateTimeI64 => nullable ? "AvnOptionalDateTime" : "long",
             MarshallingKind.PixelPointI32 => "AvnPixelPoint",
-            MarshallingKind.ComInterface => (interfaceName is null ? "object" : SimpleName(interfaceName)) + (nullable ? "?" : ""),
-            MarshallingKind.Brush => SimpleName(interfaceName!) + (nullable ? "?" : ""),
-            MarshallingKind.Command => SimpleName(interfaceName!) + (nullable ? "?" : ""),
-            MarshallingKind.DataTemplate => SimpleName(interfaceName!) + (nullable ? "?" : ""),
-            MarshallingKind.ItemFilter => SimpleName(interfaceName!) + (nullable ? "?" : ""),
-            MarshallingKind.TextFilter => SimpleName(interfaceName!) + (nullable ? "?" : ""),
-            MarshallingKind.ItemSelector => SimpleName(interfaceName!) + (nullable ? "?" : ""),
-            MarshallingKind.TextSelector => SimpleName(interfaceName!) + (nullable ? "?" : ""),
-            MarshallingKind.PopupPlacement => SimpleName(interfaceName!) + (nullable ? "?" : ""),
-            MarshallingKind.AsyncPopulator => SimpleName(interfaceName!) + (nullable ? "?" : ""),
-            MarshallingKind.Notification => SimpleName(interfaceName!) + (nullable ? "?" : ""),
-            MarshallingKind.ComCollection => SimpleName(interfaceName!),
+            MarshallingKind.ComInterface => (interfaceName is null ? "object?" : SimpleName(interfaceName) + "?"),
+            MarshallingKind.Brush => SimpleName(interfaceName!) + "?",
+            MarshallingKind.Command => SimpleName(interfaceName!) + "?",
+            MarshallingKind.DataTemplate => SimpleName(interfaceName!) + "?",
+            MarshallingKind.ItemFilter => SimpleName(interfaceName!) + "?",
+            MarshallingKind.TextFilter => SimpleName(interfaceName!) + "?",
+            MarshallingKind.ItemSelector => SimpleName(interfaceName!) + "?",
+            MarshallingKind.TextSelector => SimpleName(interfaceName!) + "?",
+            MarshallingKind.PopupPlacement => SimpleName(interfaceName!) + "?",
+            MarshallingKind.AsyncPopulator => SimpleName(interfaceName!) + "?",
+            MarshallingKind.Notification => SimpleName(interfaceName!) + "?",
+            MarshallingKind.ComCollection => SimpleName(interfaceName!) + "?",
             _ when GeometryMarshalling.TryGet(kind, out var geometry) =>
                 nullable ? geometry.OptionalAbiName : geometry.AbiName,
             _ => throw new InvalidOperationException($"Cannot emit C# for {kind}"),

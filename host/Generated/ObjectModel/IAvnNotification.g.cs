@@ -36,7 +36,6 @@ public partial interface IAvnNotification
     int GetOnClose(out IAvnNotificationActionHandler? value);
 }
 
-[GeneratedComClass]
 public sealed partial class AvnNotification : global::Avalonia.Controls.Notifications.INotification
 {
     private readonly IAvnNotification _inner;

@@ -1125,7 +1125,6 @@ fn emit_args_event_handler(event: &ProjectedEvent) -> String {
     // raw pointer the handler receives.
     let mut args_slots = String::new();
     let mut args_methods = String::new();
-    let mut slot = 3;
     for parameter in &event.parameters {
         let prop = to_snake(&parameter.name);
         args_slots.push_str(&format!(
@@ -1148,7 +1147,6 @@ fn emit_args_event_handler(event: &ProjectedEvent) -> String {
              \x20       }}\n\
              \x20   }}\n"
         ));
-        slot += 2;
     }
 
     format!(

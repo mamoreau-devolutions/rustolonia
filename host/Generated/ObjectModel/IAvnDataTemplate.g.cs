@@ -57,7 +57,7 @@ public sealed partial class AvnDataTemplate : IAvnDataTemplate
                 global::System.Runtime.InteropServices.Marshal.ThrowExceptionForHR(hr);
             return value != 0;
         }
-        public new global::Avalonia.Controls.Control? Build()
+        public global::Avalonia.Controls.Control? Build()
         {
             var hr = _inner.Build(out var value);
             if (hr < 0)

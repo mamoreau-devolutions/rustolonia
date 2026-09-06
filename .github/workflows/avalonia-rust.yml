@@ -153,3 +153,76 @@ jobs:
           name: avalonia-rust-${{ matrix.rid }}
           path: rust/artifacts/${{ matrix.rid }}
           if-no-files-found: error
+
+  cross-build:
+    name: cross-build (${{ matrix.rid }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-arm64
+            platform: Win32
+            rust-target: aarch64-pc-windows-msvc
+          - os: ubuntu-latest
+            rid: linux-arm64
+            platform: X11
+            rust-target: aarch64-unknown-linux-gnu
+          - os: macos-14
+            rid: osx-x64
+            platform: OSX
+            rust-target: x86_64-apple-darwin
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Apply Avalonia source patches
+        shell: pwsh
+        run: ./avalonia-patches/apply-avalonia-patches.ps1 -AvaloniaRoot ./avalonia-src
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.201
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-target }}
+
+      - name: Install Linux cross toolchain
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes gcc-aarch64-linux-gnu
+
+      - name: Set Linux cross-linker
+        if: runner.os == 'Linux'
+        shell: bash
+        run: echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+
+      - name: Generate Avalonia.Native COM headers
+        if: runner.os == 'macOS'
+        shell: pwsh
+        run: dotnet run --project nukebuild/_build.csproj --target GenerateCppHeaders
+        working-directory: ./avalonia-src
+
+      - name: Cross-package NativeAOT sample artifacts
+        shell: pwsh
+        run: ./rust/package.ps1 -Rid ${{ matrix.rid }} -Configuration Release -Example rust_vm_axaml
+
+      - name: Verify package checksums
+        shell: pwsh
+        run: |
+          $package = Join-Path 'rust' 'artifacts' '${{ matrix.rid }}'
+          Get-Content (Join-Path $package 'checksums.sha256') | ForEach-Object {
+            $expected, $file = $_ -split '\s+\*', 2
+            if ((Get-FileHash (Join-Path $package $file) -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) {
+              throw "Checksum mismatch for $file"
+            }
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: avalonia-rust-${{ matrix.rid }}
+          path: rust/artifacts/${{ matrix.rid }}
+          if-no-files-found: error

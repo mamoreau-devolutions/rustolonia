@@ -365,7 +365,7 @@ public class ComSourceEmitterTests
             treeView,
             StringComparison.Ordinal);
         Assert.Contains(
-            "int ExpandSubTreeWithTreeViewItem(IAvnTreeViewItem item);",
+            "int ExpandSubTreeWithTreeViewItem(IAvnTreeViewItem? item);",
             treeView,
             StringComparison.Ordinal);
         Assert.Contains(
@@ -414,7 +414,7 @@ public class ComSourceEmitterTests
         // ShowAt takes a control and unwraps it back to the Avalonia object; that method, not an
         // attached property, is how a flyout reaches a control in this wave.
         Assert.Contains(
-            "int ShowAtWithControl(IAvnControl placementTarget);",
+            "int ShowAtWithControl(IAvnControl? placementTarget);",
             flyoutBase,
             StringComparison.Ordinal);
         Assert.Contains(
@@ -517,7 +517,7 @@ public class ComSourceEmitterTests
         // MinYear has no absent state, so its slot is a non-nullable string on the other converter.
         Assert.Contains("int SetMinYear(string value);", datePicker, StringComparison.Ordinal);
         Assert.Contains(
-            "_value.MinYear = global::Avalonia.Host.Com.AvnDateTimeOffsetValue.FromAbi(value);",
+            "_value.MinYear = global::Avalonia.Host.Com.AvnDateTimeOffsetValue.FromAbi(value)!",
             datePicker,
             StringComparison.Ordinal);
         Assert.DoesNotContain("System.DateTimeOffset.Parse", datePicker, StringComparison.Ordinal);
