@@ -21,3 +21,5 @@ samples/RustViewModelSample.Managed/Generated/** text eol=lf
 rust/projection.ir.json text eol=lf
 rust/view-model.ir.json text eol=lf
 rust/avalonia-sys/include/avalonia-rust-abi.h text eol=lf
+rust/view-model.contract.md text eol=lf
+rust/projection.ir.gaps.txt text eol=lf
