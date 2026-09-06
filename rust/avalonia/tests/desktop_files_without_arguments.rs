@@ -42,6 +42,8 @@ fn host_path() -> PathBuf {
         })
 }
 
+// Same host-launch family as desktop_files.rs: requires an interactive desktop session.
+#[ignore = "host-side managed exception under headless runners (tracked)"]
 #[test]
 fn explicitly_empty_startup_arguments_produce_no_activation_items() {
     let ran = Arc::new(AtomicBool::new(false));

@@ -13,3 +13,11 @@ rust/build.sh text eol=lf
 rust/avalonia-sys/src/generated.rs text eol=lf
 rust/avalonia/src/generated.rs text eol=lf
 rust/avalonia/src/generated_view_models.rs text eol=lf
+
+# Generated artifacts: the projection tools emit LF on every platform, so pin
+# checkout to LF too — otherwise autocrlf on Windows flips them after every regen.
+host/Generated/** text eol=lf
+samples/RustViewModelSample.Managed/Generated/** text eol=lf
+rust/projection.ir.json text eol=lf
+rust/view-model.ir.json text eol=lf
+rust/avalonia-sys/include/avalonia-rust-abi.h text eol=lf
