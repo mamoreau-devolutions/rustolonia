@@ -173,7 +173,7 @@ fn the_factory_gains_a_creator_per_constructible_wave_b_type() {
 fn wave_b_interfaces_publish_abi_version_one_and_nothing_else_moved() {
     for expected in [
         "#define I_AVN_FLYOUT_BASE_ABI_VERSION 1",
-        "#define I_AVN_POPUP_FLYOUT_BASE_ABI_VERSION 5",
+        "#define I_AVN_POPUP_FLYOUT_BASE_ABI_VERSION 6",
         "#define I_AVN_FLYOUT_ABI_VERSION 4",
         "#define I_AVN_MENU_BASE_ABI_VERSION 12",
         "#define I_AVN_MENU_ABI_VERSION 12",

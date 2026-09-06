@@ -49,7 +49,7 @@ fn menu_flyout_items_use_the_existing_item_list() {
         "*set_placement)(IAvnContextMenu* self, int32_t value)",
         "*set_horizontal_offset)(IAvnContextMenu* self, double value)",
         "#define I_AVN_MENU_FLYOUT_ABI_VERSION 5",
-        "#define I_AVN_CONTEXT_MENU_ABI_VERSION 14",
+        "#define I_AVN_CONTEXT_MENU_ABI_VERSION 15",
         "#define I_AVN_BUTTON_ABI_VERSION 16",
     ] {
         assert!(HEADER.contains(expected), "header is missing `{expected}`");

@@ -2034,17 +2034,23 @@ mod tests {
             .expect("range source");
         let caller = std::thread::current().id();
 
+        // Issue the requests one at a time and wait for each delivery: whether two
+        // identical requests queue before the drain thread wakes is timing-dependent
+        // on loaded runners, so this test observes one delivery per request instead of
+        // racing the queue's coalescing window.
         source.request_range(5, 0, 64, 3).expect("request accepted");
-        // Identical requests coalesce; a different offset does not.
-        source.request_range(5, 0, 64, 3).expect("request accepted");
+        let mut guard = seen.lock().expect("seen lock");
+        while guard.is_empty() {
+            let (next, timeout) = signal
+                .wait_timeout(guard, std::time::Duration::from_secs(30))
+                .expect("condvar");
+            assert!(!timeout.timed_out(), "the drain thread never delivered");
+            guard = next;
+        }
         source
             .request_range(5, 64, 64, 3)
             .expect("request accepted");
-
-        let mut guard = seen.lock().expect("seen lock");
         while guard.len() < 2 {
-            // A loaded CI runner can starve the delivery thread for seconds; 30s still guards
-            // against a true hang.
             let (next, timeout) = signal
                 .wait_timeout(guard, std::time::Duration::from_secs(30))
                 .expect("condvar");

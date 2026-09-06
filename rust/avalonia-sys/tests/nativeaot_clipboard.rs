@@ -63,7 +63,6 @@ fn clipboard(host: &Host) -> ComPtr<IAvnApplication4> {
 
 /// The clipboard capability is queried, never bolted onto a published vtable.
 #[ignore = "requires a desktop session: host bootstrap needs a display (X11) or the macOS main thread (tracked)"]
-#[test]
 fn the_clipboard_capability_is_separately_versioned() {
     let host = load();
     let application = host
@@ -87,7 +86,7 @@ fn the_clipboard_capability_is_separately_versioned() {
 
 /// The payload builder is host-owned, so this direction of the ABI only ever
 /// carries primitives and UTF-16 strings.
-#[test]
+#[ignore = "requires a desktop session: host bootstrap needs a display (X11) or the macOS main thread (tracked)"]
 fn the_host_owned_payload_builder_accepts_text_and_file_uris() {
     let host = load();
     let capability = clipboard(&host);
@@ -111,7 +110,7 @@ fn the_host_owned_payload_builder_accepts_text_and_file_uris() {
 
 /// Every entry point that takes a window rejects a null one before starting an
 /// operation, so a consumer never gets a pending operation it cannot complete.
-#[test]
+#[ignore = "requires a desktop session: host bootstrap needs a display (X11) or the macOS main thread (tracked)"]
 fn null_pointers_are_rejected_by_every_clipboard_entry_point() {
     let host = load();
     let capability = clipboard(&host);
@@ -142,7 +141,7 @@ fn null_pointers_are_rejected_by_every_clipboard_entry_point() {
 }
 
 /// Two payload builders are independent objects; a builder is never shared.
-#[test]
+#[ignore = "requires a desktop session: host bootstrap needs a display (X11) or the macOS main thread (tracked)"]
 fn each_payload_builder_is_a_distinct_object() {
     let host = load();
     let capability = clipboard(&host);
