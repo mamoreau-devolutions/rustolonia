@@ -1,0 +1,29 @@
+<Project>
+
+  <!--
+    rustolonia repository build configuration.
+
+    Framework versioning, target frameworks, signing and analyzers are vendored
+    under build/ so this repository builds standalone. Framework projects are
+    consumed from the pinned avalonia-src producer submodule; MSBuild's
+    Directory.Build.props walk-up would also apply this file to every producer
+    project (which carries its own configuration), so all imports here are
+    gated to projects OUTSIDE avalonia-src.
+  -->
+
+  <PropertyGroup Condition="!$(MSBuildProjectDirectory.Contains('avalonia-src'))">
+    <AvsCurrentTargetFramework>net10.0</AvsCurrentTargetFramework>
+    <AvsCurrentWindowsTargetFramework>$(AvsCurrentTargetFramework)-windows</AvsCurrentWindowsTargetFramework>
+    <AvaloniaProducerRoot Condition="'$(AvaloniaProducerRoot)' == ''">$(MSBuildThisFileDirectory)avalonia-src</AvaloniaProducerRoot>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Producer projects keep their own chain; rustolonia projects get ours. -->
+    <_IsProducerProject>$(MSBuildProjectDirectory.Contains('avalonia-src'))</_IsProducerProject>
+  </PropertyGroup>
+
+  <Import Project="build\AvaloniaPublicKey.props" Condition="'$(_IsProducerProject)' != 'True'" />
+  <Import Project="build\SharedVersion.props"     Condition="'$(_IsProducerProject)' != 'True'" />
+  <Import Project="build\NetAnalyzers.props"      Condition="'$(_IsProducerProject)' != 'True'" />
+
+</Project>

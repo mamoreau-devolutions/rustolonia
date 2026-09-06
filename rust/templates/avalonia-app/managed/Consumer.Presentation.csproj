@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
+    <IsAotCompatible>true</IsAotCompatible>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!--
+      Two roots: the Avalonia producer (framework sources, XAML build tasks) and
+      the rustolonia repository (interop libraries, build configuration). Both
+      are substituted by new-app.ps1 from the -ProducerRoot and the rustolonia
+      checkout the template was instantiated from.
+    -->
+    <AvaloniaProducerRoot Condition="'$(AvaloniaProducerRoot)' == ''">__AVALONIA_PRODUCER_ROOT__</AvaloniaProducerRoot>
+    <RustoloniaRoot Condition="'$(RustoloniaRoot)' == ''">__RUSTOLONIA_ROOT__</RustoloniaRoot>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="$(AvaloniaProducerRoot)\packages\Avalonia\Avalonia.csproj" />
+    <ProjectReference Include="$(RustoloniaRoot)\interop\Avalonia.Rust\Avalonia.Rust.csproj" />
+    <ProjectReference Include="$(RustoloniaRoot)\interop\Avalonia.Rust.Interop\Avalonia.Rust.Interop.csproj" />
+  </ItemGroup>
+  <Import Project="$(RustoloniaRoot)\build\NullableEnable.props" />
+  <Import Project="$(RustoloniaRoot)\build\BuildTargets.targets" />
+</Project>

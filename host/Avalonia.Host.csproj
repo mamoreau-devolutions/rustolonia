@@ -1,0 +1,71 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>$(AvsCurrentTargetFramework)</TargetFramework>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <PublishAot>true</PublishAot>
+    <NativeLib>Shared</NativeLib>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)GeneratedFiles</CompilerGeneratedFilesOutputPath>
+    <RootNamespace>Avalonia.Host</RootNamespace>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableRuntimeMarshalling>true</EnableRuntimeMarshalling>
+    <UseMicroCom>true</UseMicroCom>
+    <UseMicroComGeneratorRoslyn>true</UseMicroComGeneratorRoslyn>
+    <!-- Consumers replace these two inputs when publishing a NativeAOT host. -->
+    <AvaloniaRustPresentationProjects Condition="'$(AvaloniaRustPresentationProjects)' == ''">..\samples\RustViewModelSample.Managed\RustViewModelSample.Managed.csproj</AvaloniaRustPresentationProjects>
+    <AvaloniaRustHostPlatform Condition="'$(AvaloniaRustHostPlatform)' == '' and $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win-'))">Win32</AvaloniaRustHostPlatform>
+    <AvaloniaRustHostPlatform Condition="'$(AvaloniaRustHostPlatform)' == '' and $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('linux-'))">X11</AvaloniaRustHostPlatform>
+    <AvaloniaRustHostPlatform Condition="'$(AvaloniaRustHostPlatform)' == '' and $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-'))">OSX</AvaloniaRustHostPlatform>
+    <AvaloniaRustHostPlatform Condition="'$(AvaloniaRustHostPlatform)' == '' and $([MSBuild]::IsOSPlatform('Windows'))">Win32</AvaloniaRustHostPlatform>
+    <AvaloniaRustHostPlatform Condition="'$(AvaloniaRustHostPlatform)' == '' and $([MSBuild]::IsOSPlatform('Linux'))">X11</AvaloniaRustHostPlatform>
+    <AvaloniaRustHostPlatform Condition="'$(AvaloniaRustHostPlatform)' == '' and $([MSBuild]::IsOSPlatform('OSX'))">OSX</AvaloniaRustHostPlatform>
+    <DefineConstants Condition="'$(AvaloniaRustHostPlatform)' == 'Win32'">$(DefineConstants);AVN_HOST_WIN32</DefineConstants>
+    <DefineConstants Condition="'$(AvaloniaRustHostPlatform)' == 'X11'">$(DefineConstants);AVN_HOST_X11</DefineConstants>
+    <DefineConstants Condition="'$(AvaloniaRustHostPlatform)' == 'OSX'">$(DefineConstants);AVN_HOST_OSX</DefineConstants>
+  </PropertyGroup>
+  <Target Name="ValidateAvaloniaRustHostPlatform" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(AvaloniaRustHostPlatform)' != 'Win32' and '$(AvaloniaRustHostPlatform)' != 'X11' and '$(AvaloniaRustHostPlatform)' != 'OSX'"
+           Text="AvaloniaRustHostPlatform must be Win32, X11, or OSX for runtime identifier '$(RuntimeIdentifier)'." />
+  </Target>
+  <Target Name="ValidateAvaloniaRustConsumerInputs" BeforeTargets="PrepareForBuild">
+    <Error Condition="'@(AvaloniaRustPresentationProject)' == ''"
+           Text="AvaloniaRustPresentationProjects must contain at least one managed presentation project." />
+    <Error Condition="!Exists('%(AvaloniaRustPresentationProject.Identity)')"
+           Text="AvaloniaRustPresentationProjects contains a project that does not exist: '%(AvaloniaRustPresentationProject.Identity)'." />
+    <Error Condition="'$(AvaloniaRustViewRegistryFile)' != '' and !Exists('$(AvaloniaRustViewRegistryFile)')"
+           Text="AvaloniaRustViewRegistryFile does not exist: '$(AvaloniaRustViewRegistryFile)'." />
+  </Target>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Avalonia.Host.Tests, PublicKey=$(AvaloniaPublicKey)" />
+    <MicroComIdl Include="Ownership\microcom-ownership.idl" />
+    <ProjectReference Include="..\avalonia-src\src\Skia\Avalonia.Skia\Avalonia.Skia.csproj" />
+    <ProjectReference Include="..\avalonia-src\src\HarfBuzz\Avalonia.HarfBuzz\Avalonia.HarfBuzz.csproj" />
+    <ProjectReference Include="..\avalonia-src\src\Avalonia.Themes.Fluent\Avalonia.Themes.Fluent.csproj" />
+    <ProjectReference Include="..\interop\Avalonia.Rust\Avalonia.Rust.csproj" />
+    <ProjectReference Include="..\interop\Avalonia.Rust.Interop\Avalonia.Rust.Interop.csproj" />
+    <AvaloniaRustPresentationProject Include="$(AvaloniaRustPresentationProjects)" />
+    <ProjectReference Include="@(AvaloniaRustPresentationProject)" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(AvaloniaRustViewRegistryFile)' != ''">
+    <Compile Remove="Generated\ViewModels\RustViewRegistry.g.cs" />
+    <Compile Include="$(AvaloniaRustViewRegistryFile)" Link="Generated\ViewModels\RustViewRegistry.g.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(AvaloniaRustHostPlatform)' == 'Win32'">
+    <ProjectReference Include="..\avalonia-src\src\Windows\Avalonia.Win32\Avalonia.Win32.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(AvaloniaRustHostPlatform)' == 'X11'">
+    <ProjectReference Include="..\avalonia-src\src\Avalonia.X11\Avalonia.X11.csproj" />
+    <LinkerArg Include="-Wl,-rpath,'$ORIGIN'" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(AvaloniaRustHostPlatform)' == 'OSX'">
+    <ProjectReference Include="..\avalonia-src\src\Avalonia.Native\Avalonia.Native.csproj" />
+    <LinkerArg Include="-Wl,-rpath,@loader_path" />
+  </ItemGroup>
+  <Import Project="..\build\NullableEnable.props" />
+  <Import Project="..\build\TrimmingEnable.props" />
+  <Import Project="..\build\MicroCOM.props" />
+</Project>

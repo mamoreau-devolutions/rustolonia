@@ -1,0 +1,12 @@
+[package]
+name = "avalonia-bindgen"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Code generator that emits avalonia-sys/avalonia from projection.ir.json"
+repository = "https://github.com/AvaloniaUI/Avalonia"
+publish = false
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

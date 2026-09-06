@@ -1,0 +1,16 @@
+
+# Rust workspace
+rust/target/
+# The app template is excluded from the workspace (it's copied out by
+# rust/new-app.ps1 / rust/new-app.sh) and builds/locks standalone.
+rust/templates/*/target/
+rust/templates/*/Cargo.lock
+# Instantiated application scaffolds and packaged artifacts stay local.
+rust/artifacts/
+__pycache__/
+*.pyc
+
+# .NET
+bin/
+obj/
+artifacts/

@@ -1,0 +1,10 @@
+* text=auto
+rust/build.sh text eol=lf
+*.cs     diff=csharp
+*.csproj text
+*.sln    text
+*.props  text
+*.targets text
+*.rs     text
+*.patch  text
+*.ps1    text
