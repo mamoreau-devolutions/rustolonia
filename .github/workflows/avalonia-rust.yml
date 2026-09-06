@@ -68,6 +68,12 @@ jobs:
           git diff --exit-code -- . ':!avalonia-src'
           if (git status --porcelain -- . ':!avalonia-src') { throw "Generation changed the checkout." }
 
+      - name: Generate Avalonia.Native COM headers
+        if: runner.os == 'macOS'
+        shell: pwsh
+        run: dotnet run --project ./avalonia-src/nukebuild/_build.csproj --target GenerateCppHeaders
+        working-directory: ./avalonia-src
+
       - name: Build Avalonia.Native for managed tests
         if: runner.os == 'macOS'
         shell: bash

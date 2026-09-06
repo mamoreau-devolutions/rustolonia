@@ -8,3 +8,8 @@ rust/build.sh text eol=lf
 *.rs     text
 *.patch  text
 *.ps1    text
+
+# Machine-generated Rust artifacts are canonical LF on every platform.
+rust/avalonia-sys/src/generated.rs text eol=lf
+rust/avalonia/src/generated.rs text eol=lf
+rust/avalonia/src/generated_view_models.rs text eol=lf

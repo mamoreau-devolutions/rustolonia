@@ -12,7 +12,7 @@ function Assert-True {
     }
 }
 
-$root = Split-Path -Parent $PSScriptRoot
+$root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $scratch = Join-Path $PSScriptRoot ([guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $scratch | Out-Null
 try {
@@ -46,16 +46,16 @@ try {
     ($bad | ConvertTo-Json -Depth 4) | Set-Content -LiteralPath $badPath -Encoding utf8
     $errorText = ''
     $avaloniaRoot = Join-Path $root 'avalonia-src'
-    try { & (Join-Path $root 'build-app.ps1') -ProducerRoot $avaloniaRoot -Manifest $badPath } catch { $errorText = "$_" }
+    try { & (Join-Path $root 'rust' 'build-app.ps1') -ProducerRoot $avaloniaRoot -Manifest $badPath } catch { $errorText = "$_" }
     Assert-True ($errorText -match 'unknown field') 'unknown field must be rejected'
 
     $bundle = Join-Path $scratch 'bundle'
     New-Item -ItemType Directory -Path $bundle | Out-Null
     [IO.File]::WriteAllBytes((Join-Path $bundle 'z.bin'), [byte[]](0x7A))
     [IO.File]::WriteAllBytes((Join-Path $bundle 'a.bin'), [byte[]](0x61))
-    & (Join-Path $root 'generate-sbom.ps1') -Rid 'win-x64' -Bundle $bundle
+    & (Join-Path $root 'rust' 'generate-sbom.ps1') -Rid 'win-x64' -Bundle $bundle
     $first = [IO.File]::ReadAllBytes((Join-Path $bundle 'sbom.cdx.json'))
-    & (Join-Path $root 'generate-sbom.ps1') -Rid 'win-x64' -Bundle $bundle
+    & (Join-Path $root 'rust' 'generate-sbom.ps1') -Rid 'win-x64' -Bundle $bundle
     $second = [IO.File]::ReadAllBytes((Join-Path $bundle 'sbom.cdx.json'))
     Assert-True ($first.Length -eq $second.Length -and [Linq.Enumerable]::SequenceEqual($first, $second)) 'SBOM must be repeatable'
 }
