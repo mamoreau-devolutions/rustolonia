@@ -63,6 +63,7 @@ jobs:
         shell: pwsh
         run: |
           ./rust/regenerate-and-build.ps1 -Configuration Release -SkipManagedBuild
+          git status --porcelain -- . ':!avalonia-src' | ForEach-Object { Write-Host "CHANGED: $_" }
           git diff --check -- . ':!avalonia-src'
           git diff --exit-code -- . ':!avalonia-src'
           if (git status --porcelain -- . ':!avalonia-src') { throw "Generation changed the checkout." }
