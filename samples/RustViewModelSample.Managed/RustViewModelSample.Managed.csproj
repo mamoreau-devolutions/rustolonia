@@ -8,7 +8,7 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\avalonia-src\packages\Avalonia\Avalonia.csproj" />
+    <ProjectReference Include="$(AvaloniaProducerRoot)\packages\Avalonia\Avalonia.csproj" />
     <ProjectReference Include="..\..\interop\Avalonia.Rust\Avalonia.Rust.csproj" />
     <ProjectReference Include="..\..\interop\Avalonia.Rust.Interop\Avalonia.Rust.Interop.csproj" />
   </ItemGroup>

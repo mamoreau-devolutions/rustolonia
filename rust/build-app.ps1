@@ -189,6 +189,7 @@ function Invoke-ConsumerPackage {
     try {
         Invoke-Logged -WorkingDirectory $ProducerRootPath -Command @(
             'dotnet', 'publish', $hostProject, '-c', [string]$Document.configuration, '-r', $rid,
+            "-p:AvaloniaProducerRoot=$ProducerRootPath",
             "-p:AvaloniaRustHostPlatform=$($target.Platform)",
             "-p:AvaloniaRustPresentationProjects=$($paths.presentationProject)",
             "-p:AvaloniaRustViewRegistryFile=$($paths.generatedRegistryFile)",

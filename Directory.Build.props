@@ -4,26 +4,19 @@
     rustolonia repository build configuration.
 
     Framework versioning, target frameworks, signing and analyzers are vendored
-    under build/ so this repository builds standalone. Framework projects are
-    consumed from the pinned avalonia-src producer submodule; MSBuild's
-    Directory.Build.props walk-up would also apply this file to every producer
-    project (which carries its own configuration), so all imports here are
-    gated to projects OUTSIDE avalonia-src.
+    under build/ so this repository builds standalone. The pinned Avalonia producer
+    sits under avalonia-src and keeps its own build configuration; import these
+    Rustolonia-owned settings only for projects that are not part of the producer.
   -->
 
-  <PropertyGroup Condition="!$(MSBuildProjectDirectory.Contains('avalonia-src'))">
+  <PropertyGroup>
+    <AvaloniaProducerRoot Condition="'$(AvaloniaProducerRoot)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)avalonia-src'))</AvaloniaProducerRoot>
     <AvsCurrentTargetFramework>net10.0</AvsCurrentTargetFramework>
     <AvsCurrentWindowsTargetFramework>$(AvsCurrentTargetFramework)-windows</AvsCurrentWindowsTargetFramework>
-    <AvaloniaProducerRoot Condition="'$(AvaloniaProducerRoot)' == ''">$(MSBuildThisFileDirectory)avalonia-src</AvaloniaProducerRoot>
   </PropertyGroup>
 
-  <PropertyGroup>
-    <!-- Producer projects keep their own chain; rustolonia projects get ours. -->
-    <_IsProducerProject>$(MSBuildProjectDirectory.Contains('avalonia-src'))</_IsProducerProject>
-  </PropertyGroup>
-
-  <Import Project="build\AvaloniaPublicKey.props" Condition="'$(_IsProducerProject)' != 'True'" />
-  <Import Project="build\SharedVersion.props"     Condition="'$(_IsProducerProject)' != 'True'" />
-  <Import Project="build\NetAnalyzers.props"      Condition="'$(_IsProducerProject)' != 'True'" />
+  <Import Project="build\AvaloniaPublicKey.props" />
+  <Import Project="build\SharedVersion.props" />
+  <Import Project="build\NetAnalyzers.props" />
 
 </Project>

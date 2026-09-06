@@ -42,9 +42,9 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Avalonia.Host.Tests, PublicKey=$(AvaloniaPublicKey)" />
     <MicroComIdl Include="Ownership\microcom-ownership.idl" />
-    <ProjectReference Include="..\avalonia-src\src\Skia\Avalonia.Skia\Avalonia.Skia.csproj" />
-    <ProjectReference Include="..\avalonia-src\src\HarfBuzz\Avalonia.HarfBuzz\Avalonia.HarfBuzz.csproj" />
-    <ProjectReference Include="..\avalonia-src\src\Avalonia.Themes.Fluent\Avalonia.Themes.Fluent.csproj" />
+    <ProjectReference Include="$(AvaloniaProducerRoot)\src\Skia\Avalonia.Skia\Avalonia.Skia.csproj" />
+    <ProjectReference Include="$(AvaloniaProducerRoot)\src\HarfBuzz\Avalonia.HarfBuzz\Avalonia.HarfBuzz.csproj" />
+    <ProjectReference Include="$(AvaloniaProducerRoot)\src\Avalonia.Themes.Fluent\Avalonia.Themes.Fluent.csproj" />
     <ProjectReference Include="..\interop\Avalonia.Rust\Avalonia.Rust.csproj" />
     <ProjectReference Include="..\interop\Avalonia.Rust.Interop\Avalonia.Rust.Interop.csproj" />
     <AvaloniaRustPresentationProject Include="$(AvaloniaRustPresentationProjects)" />
@@ -55,14 +55,14 @@
     <Compile Include="$(AvaloniaRustViewRegistryFile)" Link="Generated\ViewModels\RustViewRegistry.g.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(AvaloniaRustHostPlatform)' == 'Win32'">
-    <ProjectReference Include="..\avalonia-src\src\Windows\Avalonia.Win32\Avalonia.Win32.csproj" />
+    <ProjectReference Include="$(AvaloniaProducerRoot)\src\Windows\Avalonia.Win32\Avalonia.Win32.csproj" />
   </ItemGroup>
   <ItemGroup Condition="'$(AvaloniaRustHostPlatform)' == 'X11'">
-    <ProjectReference Include="..\avalonia-src\src\Avalonia.X11\Avalonia.X11.csproj" />
+    <ProjectReference Include="$(AvaloniaProducerRoot)\src\Avalonia.X11\Avalonia.X11.csproj" />
     <LinkerArg Include="-Wl,-rpath,'$ORIGIN'" />
   </ItemGroup>
   <ItemGroup Condition="'$(AvaloniaRustHostPlatform)' == 'OSX'">
-    <ProjectReference Include="..\avalonia-src\src\Avalonia.Native\Avalonia.Native.csproj" />
+    <ProjectReference Include="$(AvaloniaProducerRoot)\src\Avalonia.Native\Avalonia.Native.csproj" />
     <LinkerArg Include="-Wl,-rpath,@loader_path" />
   </ItemGroup>
   <Import Project="..\build\NullableEnable.props" />

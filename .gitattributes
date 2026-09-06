@@ -1,5 +1,4 @@
 * text=auto
-rust/build.sh text eol=lf
 *.cs     diff=csharp
 *.csproj text
 *.sln    text

@@ -99,7 +99,8 @@ if ($ValidateTemplate)
     Write-Host "==> [3/4] Validating the external consumer template compiles standalone"
     $templateConsumer = Join-Path $repositoryRoot 'rust' 'target' 'template-validation'
     Remove-Item $templateConsumer -Recurse -Force -ErrorAction SilentlyContinue
-    & (Join-Path $PSScriptRoot 'new-app.ps1') -Name template_validation -Destination $templateConsumer -ProducerRoot $repositoryRoot
+    $producerRoot = Join-Path $repositoryRoot 'avalonia-src'
+    & (Join-Path $PSScriptRoot 'new-app.ps1') -Name template_validation -Destination $templateConsumer -ProducerRoot $producerRoot -RustoloniaRoot $repositoryRoot
     dotnet run --project (Join-Path $repositoryRoot 'projection' 'Avalonia.ViewModelProjection.Tool') -c $Configuration -- `
         (Join-Path $templateConsumer 'view-model.ir.json') `
         (Join-Path $templateConsumer 'managed' 'Generated') `

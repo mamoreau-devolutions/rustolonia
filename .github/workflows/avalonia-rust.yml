@@ -107,10 +107,17 @@ jobs:
       - name: Run managed host and generator tests
         shell: pwsh
         run: |
-          dotnet test tests/Avalonia.Host.Tests/Avalonia.Host.Tests.csproj -c Release
-          dotnet test tests/Avalonia.Projection.Generator.Tests/Avalonia.Projection.Generator.Tests.csproj -c Release
-          dotnet test tests/Avalonia.Projection.Ir.Tests/Avalonia.Projection.Ir.Tests.csproj -c Release
+          $projects = @(
+            'tests/Avalonia.Host.Tests/Avalonia.Host.Tests.csproj',
+            'tests/Avalonia.Projection.Generator.Tests/Avalonia.Projection.Generator.Tests.csproj',
+            'tests/Avalonia.Projection.Ir.Tests/Avalonia.Projection.Ir.Tests.csproj'
+          )
+          foreach ($project in $projects) {
+            & dotnet test $project -c Release
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
           pwsh ./rust/tests/test-build-app.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Publish NativeAOT host and run cargo workspace tests
         shell: pwsh
@@ -120,7 +127,9 @@ jobs:
         shell: pwsh
         run: |
           cargo build --manifest-path rust/Cargo.toml -p avalonia --example rust_vm_axaml --release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo build --manifest-path rust/Cargo.toml -p avalonia --example rust_dynamic_vm_axaml --release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Package NativeAOT sample artifacts
         shell: pwsh

@@ -8,7 +8,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Avalonia.Projection.Ir\Avalonia.Projection.Ir.csproj" />
     <ProjectReference Include="..\Avalonia.Projection.Generator\Avalonia.Projection.Generator.csproj" />
-    <ProjectReference Include="..\..\avalonia-src\src\Avalonia.Controls\Avalonia.Controls.csproj" />
+    <ProjectReference Include="$(AvaloniaProducerRoot)\src\Avalonia.Controls\Avalonia.Controls.csproj" />
   </ItemGroup>
   <Import Project="..\..\build\NullableEnable.props" />
 </Project>
