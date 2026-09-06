@@ -54,6 +54,7 @@ fn projection_diagnostics(
     snapshot
 }
 
+#[ignore = "requires a desktop session: host bootstrap needs a display (X11) or the macOS main thread (tracked)"]
 #[test]
 fn application_runs_generated_object_model_through_rust_handler() {
     let path = host_path();

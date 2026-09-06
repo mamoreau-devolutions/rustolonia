@@ -103,12 +103,12 @@ fn wave_a_iids_are_fresh_and_distinct_from_every_shipped_one() {
         ),
         (
             "IAvnItemsControl",
-            "E61DDE0E-DE4F-5D63-B485-C9A8FB72537F",
+            "D985D274-6EFC-5423-B74F-7A73133992FC",
             I_AVN_ITEMS_CONTROL_IID,
         ),
         (
             "IAvnSelectingItemsControl",
-            "0381D38A-B15F-53A5-8D29-BADCE2D1173D",
+            "B2D5F624-DE4C-5278-977F-9EB764DD6B2F",
             I_AVN_SELECTING_ITEMS_CONTROL_IID,
         ),
         (

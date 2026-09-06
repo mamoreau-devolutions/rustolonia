@@ -62,6 +62,7 @@ fn clipboard(host: &Host) -> ComPtr<IAvnApplication4> {
 }
 
 /// The clipboard capability is queried, never bolted onto a published vtable.
+#[ignore = "requires a desktop session: host bootstrap needs a display (X11) or the macOS main thread (tracked)"]
 #[test]
 fn the_clipboard_capability_is_separately_versioned() {
     let host = load();

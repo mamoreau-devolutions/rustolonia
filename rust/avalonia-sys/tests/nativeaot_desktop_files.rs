@@ -55,6 +55,7 @@ fn load() -> Host {
 
 /// Startup arguments, activation items and picker options need no UI thread, so
 /// they are exercised before `Run` is ever called.
+#[ignore = "requires a desktop session: host bootstrap needs a display (X11) or the macOS main thread (tracked)"]
 #[test]
 fn startup_arguments_and_activation_items_round_trip_without_a_ui_thread() {
     let host = load();
