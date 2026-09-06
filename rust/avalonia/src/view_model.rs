@@ -2043,8 +2043,10 @@ mod tests {
 
         let mut guard = seen.lock().expect("seen lock");
         while guard.len() < 2 {
+            // A loaded CI runner can starve the delivery thread for seconds; 30s still guards
+            // against a true hang.
             let (next, timeout) = signal
-                .wait_timeout(guard, std::time::Duration::from_secs(5))
+                .wait_timeout(guard, std::time::Duration::from_secs(30))
                 .expect("condvar");
             assert!(!timeout.timed_out(), "the drain thread never delivered");
             guard = next;

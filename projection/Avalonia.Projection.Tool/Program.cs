@@ -36,9 +36,9 @@ if (args.Length == 3)
 }
 
 var reportPath = Path.ChangeExtension(irPath, ".gaps.txt");
-File.WriteAllLines(
+File.WriteAllText(
     reportPath,
-    ir.Skipped.Select(s => $"{s.Owner}.{s.Member}: {s.Reason}"));
+    string.Join("\n", ir.Skipped.Select(s => $"{s.Owner}.{s.Member}: {s.Reason}")) + "\n");
 
 Console.WriteLine($"Generated {ir.Types.Count} projected types and {ir.Skipped.Count} gap entries.");
 return 0;
