@@ -56,6 +56,7 @@ fn load() -> Host {
 /// Startup arguments, activation items and picker options need no UI thread, so
 /// they are exercised before `Run` is ever called.
 #[ignore = "requires a desktop session: host bootstrap needs a display (X11) or the macOS main thread (tracked)"]
+#[test]
 fn startup_arguments_and_activation_items_round_trip_without_a_ui_thread() {
     let host = load();
     let application = host
@@ -116,6 +117,7 @@ fn startup_arguments_and_activation_items_round_trip_without_a_ui_thread() {
 }
 
 #[ignore = "requires a desktop session: host bootstrap needs a display (X11) or the macOS main thread (tracked)"]
+#[test]
 fn picker_options_accept_every_documented_field() {
     let host = load();
     let application = host
@@ -180,6 +182,7 @@ fn picker_options_accept_every_documented_field() {
 }
 
 #[ignore = "requires a desktop session: host bootstrap needs a display (X11) or the macOS main thread (tracked)"]
+#[test]
 fn null_arguments_are_rejected_before_any_work_happens() {
     let host = load();
     let application = host
@@ -199,6 +202,7 @@ fn null_arguments_are_rejected_before_any_work_happens() {
 /// Drop subscriptions, activation advises and picker starts are UI-thread
 /// affine, so they run inside the application's startup handler.
 #[ignore = "requires a desktop session: host bootstrap needs a display (X11) or the macOS main thread (tracked)"]
+#[test]
 fn drop_and_activation_subscriptions_attach_and_detach_on_the_ui_thread() {
     let host = load();
     let factory = host.activation_factory().unwrap();

@@ -19,13 +19,14 @@ public class WaveU30ObjectListsComTests
         var wrapper = Assert.IsType<AvnCommandBar>(projected);
 
         Assert.Equal(0, wrapper.GetPrimaryCommands(out var list));
-        Assert.Equal(0, list.GetCount(out var count));
+        Assert.NotNull(list);
+        Assert.Equal(0, list!.GetCount(out var count));
         Assert.Equal(0, count);
 
         // Adding through the list persists into the bar's collection.
         Assert.Equal(0, factory.CreateCommandBarButton(out var button));
         var buttonWrapper = Assert.IsType<AvnCommandBarButton>(button);
-        Assert.Equal(0, list.Add(buttonWrapper));
+        Assert.Equal(0, list!.Add(buttonWrapper));
         Assert.Equal(0, list.GetCount(out var added));
         Assert.Equal(1, added);
 
@@ -37,7 +38,8 @@ public class WaveU30ObjectListsComTests
 
         // The read-only views observe the same collection.
         Assert.Equal(0, wrapper.GetVisiblePrimaryCommands(out var visible));
-        Assert.Equal(0, visible.GetCount(out var visibleCount));
+        Assert.NotNull(visible);
+        Assert.Equal(0, visible!.GetCount(out var visibleCount));
         Assert.Equal(1, visibleCount);
     }
 
