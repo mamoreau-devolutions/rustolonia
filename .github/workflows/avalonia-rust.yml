@@ -59,6 +59,26 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install --yes xvfb
 
+      - name: Restore packages (retries on NuGet flakes)
+        shell: pwsh
+        run: |
+          $projects = @(
+            'projection/Avalonia.Projection.Tool/Avalonia.Projection.Tool.csproj',
+            'projection/Avalonia.ViewModelProjection.Tool/Avalonia.ViewModelProjection.Tool.csproj',
+            'avalonia-src/src/Avalonia.Build.Tasks/Avalonia.Build.Tasks.csproj'
+          )
+          foreach ($project in $projects) {
+            $attempt = 0
+            while ($true) {
+              $attempt++
+              dotnet restore $project
+              if ($LASTEXITCODE -eq 0) { break }
+              if ($attempt -ge 4) { throw "restore failed after $attempt attempts: $project" }
+              Write-Host "restore of $project failed (attempt $attempt); retrying in 15s"
+              Start-Sleep -Seconds 15
+            }
+          }
+
       - name: Check generator determinism
         shell: pwsh
         run: |
@@ -206,9 +226,23 @@ jobs:
         run: dotnet run --project nukebuild/_build.csproj --target GenerateCppHeaders
         working-directory: ./avalonia-src
 
+      - name: Restore producer packages (retries on NuGet flakes)
+        shell: pwsh
+        run: |
+          $project = 'avalonia-src/src/Avalonia.Build.Tasks/Avalonia.Build.Tasks.csproj'
+          $attempt = 0
+          while ($true) {
+            $attempt++
+            dotnet restore $project
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($attempt -ge 4) { throw "restore failed after $attempt attempts: $project" }
+            Write-Host "restore of $project failed (attempt $attempt); retrying in 15s"
+            Start-Sleep -Seconds 15
+          }
+
       - name: Build the producer's build tasks
         shell: pwsh
-        run: dotnet build avalonia-src/src/Avalonia.Build.Tasks/Avalonia.Build.Tasks.csproj -c Release
+        run: dotnet build avalonia-src/src/Avalonia.Build.Tasks/Avalonia.Build.Tasks.csproj -c Release --no-restore
 
       - name: Cross-package NativeAOT sample artifacts
         shell: pwsh
