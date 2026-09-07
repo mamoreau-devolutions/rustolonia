@@ -3,8 +3,9 @@ using System.Text.Json.Serialization;
 
 namespace Avalonia.Projection.Ir;
 
-public sealed class ProjectionIr
+public sealed partial class ProjectionIr
 {
+    public const int MinimumVersion = 1;
     public const int CurrentVersion = 16;
 
     public int Version { get; init; } = CurrentVersion;
@@ -105,9 +106,17 @@ public sealed class ProjectionIr
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    public string ToJson() => JsonSerializer.Serialize(this, JsonOptions);
+    public string ToJson()
+    {
+        Validate();
+        return JsonSerializer.Serialize(this, JsonOptions);
+    }
 
-    public static ProjectionIr FromJson(string json) =>
-        JsonSerializer.Deserialize<ProjectionIr>(json, JsonOptions)
-        ?? throw new InvalidOperationException("IR JSON deserialized to null.");
+    public static ProjectionIr FromJson(string json)
+    {
+        var ir = JsonSerializer.Deserialize<ProjectionIr>(json, JsonOptions)
+            ?? throw new InvalidOperationException("IR JSON deserialized to null.");
+        ir.Validate();
+        return ir;
+    }
 }

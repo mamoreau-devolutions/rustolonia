@@ -1,20 +1,25 @@
 mod emit;
 mod emit_safe;
+mod error;
 mod geometry;
 mod ir;
+mod validate;
 mod variant;
 
 pub use emit::emit_sys_module;
 pub use emit_safe::emit_safe_module;
+pub use error::GenerationError;
 pub use ir::ProjectionIr;
 
-pub fn generate_from_json(json: &str) -> Result<String, serde_json::Error> {
+pub fn generate_from_json(json: &str) -> Result<String, GenerationError> {
     let ir: ProjectionIr = serde_json::from_str(json)?;
+    ir.validate()?;
     Ok(emit_sys_module(&ir))
 }
 
-pub fn generate_safe_from_json(json: &str) -> Result<String, serde_json::Error> {
+pub fn generate_safe_from_json(json: &str) -> Result<String, GenerationError> {
     let ir: ProjectionIr = serde_json::from_str(json)?;
+    ir.validate()?;
     Ok(emit_safe_module(&ir))
 }
 
@@ -152,6 +157,214 @@ mod tests {
                 "vtable drift for {name}"
             );
         }
+    }
+
+    #[test]
+    fn checked_in_ir_validates() {
+        let ir: ProjectionIr =
+            serde_json::from_str(include_str!("../../projection.ir.json")).unwrap();
+        ir.validate().unwrap();
+    }
+
+    #[test]
+    fn version_one_void_return_is_accepted() {
+        let src = generate_from_json(
+            r#"
+            {
+              "version": 1,
+              "types": [
+                {
+                  "name": "IAvnVoid",
+                  "fullName": "Tests.IAvnVoid",
+                  "kind": "Interface",
+                  "methods": [
+                    { "name": "Noop", "returnKind": "Void", "parameters": [] }
+                  ]
+                }
+              ]
+            }
+            "#,
+        )
+        .unwrap();
+        assert!(src.contains("pub struct IAvnVoid"));
+        assert!(src.contains("pub fn noop"));
+    }
+
+    #[test]
+    fn future_schema_version_is_rejected_by_public_entrypoint() {
+        let error = generate_from_json(r#"{ "version": 17, "types": [] }"#)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("Unsupported projection IR version 17"));
+        assert!(error.contains("1..=16"));
+    }
+
+    #[test]
+    fn invalid_schema_version_is_rejected_by_public_entrypoint() {
+        let error = generate_from_json(r#"{ "version": 0, "types": [] }"#)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("Unsupported projection IR version 0"));
+    }
+
+    #[test]
+    fn unknown_marshalling_kind_is_rejected_instead_of_c_void_fallback() {
+        let error = generate_from_json(
+            r#"
+            {
+              "version": 1,
+              "types": [
+                {
+                  "name": "IAvnBad",
+                  "fullName": "Tests.IAvnBad",
+                  "kind": "Interface",
+                  "methods": [
+                    { "name": "Ping", "returnKind": "FutureKind", "parameters": [] }
+                  ]
+                }
+              ]
+            }
+            "#,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("Unknown marshalling kind 'FutureKind'"));
+        assert!(error.contains("type 'Tests.IAvnBad' method 'Ping'"));
+        assert!(!error.to_lowercase().contains("c_void"));
+    }
+
+    #[test]
+    fn unknown_parameter_direction_is_rejected_by_public_entrypoint() {
+        let error = generate_from_json(
+            r#"
+            {
+              "version": 1,
+              "types": [
+                {
+                  "name": "IAvnBad",
+                  "fullName": "Tests.IAvnBad",
+                  "kind": "Interface",
+                  "methods": [
+                    {
+                      "name": "Ping",
+                      "returnKind": "Void",
+                      "parameters": [
+                        { "name": "value", "kind": "I32", "direction": "Sideways" }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+            "#,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("Unknown parameter direction 'Sideways'"));
+        assert!(error.contains("parameter 'value'"));
+    }
+
+    #[test]
+    fn missing_base_reference_is_rejected_by_public_entrypoint() {
+        let error = generate_from_json(
+            r#"
+            {
+              "version": 1,
+              "types": [
+                {
+                  "name": "IAvnChild",
+                  "fullName": "Tests.IAvnChild",
+                  "kind": "Interface",
+                  "baseFullName": "Tests.IAvnMissing"
+                }
+              ]
+            }
+            "#,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(
+            error.contains("Type 'Tests.IAvnChild' references missing base 'Tests.IAvnMissing'")
+        );
+    }
+
+    #[test]
+    fn self_base_reference_is_rejected_by_public_entrypoint() {
+        let error = generate_from_json(
+            r#"
+            {
+              "version": 1,
+              "types": [
+                {
+                  "name": "IAvnSelf",
+                  "fullName": "Tests.IAvnSelf",
+                  "kind": "Interface",
+                  "baseFullName": "Tests.IAvnSelf"
+                }
+              ]
+            }
+            "#,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("Type 'Tests.IAvnSelf' has a self base reference."));
+    }
+
+    #[test]
+    fn inheritance_cycle_is_rejected_by_public_entrypoint() {
+        let error = generate_from_json(
+            r#"
+            {
+              "version": 1,
+              "types": [
+                {
+                  "name": "IAvnA",
+                  "fullName": "Tests.IAvnA",
+                  "kind": "Interface",
+                  "baseFullName": "Tests.IAvnB"
+                },
+                {
+                  "name": "IAvnB",
+                  "fullName": "Tests.IAvnB",
+                  "kind": "Interface",
+                  "baseFullName": "Tests.IAvnA"
+                }
+              ]
+            }
+            "#,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("Inheritance cycle: Tests.IAvnA -> Tests.IAvnB -> Tests.IAvnA"));
+    }
+
+    #[test]
+    fn unknown_type_kind_is_rejected_by_public_entrypoint() {
+        let error = generate_from_json(
+            r#"
+            {
+              "version": 1,
+              "types": [
+                {
+                  "name": "IAvnBad",
+                  "fullName": "Tests.IAvnBad",
+                  "kind": "Trait"
+                }
+              ]
+            }
+            "#,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("Unknown type kind 'Trait' at type 'Tests.IAvnBad'"));
+    }
+
+    #[test]
+    fn generate_safe_from_json_uses_the_same_validation() {
+        let error = generate_safe_from_json(r#"{ "version": 99, "types": [] }"#)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("Unsupported projection IR version 99"));
     }
 
     fn to_snake(value: &str) -> String {

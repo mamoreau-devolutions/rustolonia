@@ -19,7 +19,7 @@ fn main() -> ExitCode {
     let source = match avalonia_bindgen::generate_from_json(&json) {
         Ok(value) => value,
         Err(error) => {
-            eprintln!("Failed to parse projection IR: {error}");
+            eprintln!("Failed to generate Rust bindings: {error}");
             return ExitCode::FAILURE;
         }
     };
@@ -31,7 +31,7 @@ fn main() -> ExitCode {
         let source = match avalonia_bindgen::generate_safe_from_json(&json) {
             Ok(value) => value,
             Err(error) => {
-                eprintln!("Failed to parse projection IR for safe bindings: {error}");
+                eprintln!("Failed to generate safe Rust bindings: {error}");
                 return ExitCode::FAILURE;
             }
         };

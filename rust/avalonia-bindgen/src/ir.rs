@@ -62,6 +62,12 @@ pub struct ProjectionIr {
     pub skipped: Vec<SkippedMember>,
 }
 
+impl ProjectionIr {
+    pub fn validate(&self) -> Result<(), crate::GenerationError> {
+        crate::validate::validate(self)
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectedAttachedProperty {
