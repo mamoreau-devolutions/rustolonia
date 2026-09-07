@@ -4,7 +4,7 @@
     <Product>Rustolonia</Product>
     <Version>0.1.0</Version>
     <Authors>Rustolonia contributors</Authors>
-    <Copyright>Copyright 2025-$([System.DateTime]::Now.ToString(`yyyy`)) Rustolonia contributors. Avalonia copyrights remain with the AvaloniaUI project.</Copyright>
+    <Copyright>Copyright $([System.DateTime]::Now.ToString(`yyyy`)) Rustolonia contributors. Upstream Avalonia material retains its original copyright notices.</Copyright>
     <PackageProjectUrl>https://github.com/mamoreau-devolutions/rustolonia</PackageProjectUrl>
     <RepositoryUrl>https://github.com/mamoreau-devolutions/rustolonia</RepositoryUrl>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>

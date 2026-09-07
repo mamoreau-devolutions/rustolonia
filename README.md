@@ -32,6 +32,10 @@ pwsh ./rust/regenerate-and-build.ps1 -Configuration Release
 The regeneration pipeline (IR, generated C#, native header, Rust bindings) is
 deterministic; CI fails if regenerating changes the checkout.
 
+Open `Rustolonia.slnx` for the managed projects. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the contributor workflow and code-generation
+boundaries.
+
 ## Creating a new app
 
 ```pwsh
