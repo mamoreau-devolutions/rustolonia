@@ -63,12 +63,12 @@ configuration, and output directory; `binary` optionally selects a normal
 Cargo binary and defaults to `packageName`.
 
 ```powershell
-& .\producer\rust\build-app.ps1 -ProducerRoot .\producer `
+& .\rustolonia\rust\build-app.ps1 -ProducerRoot .\rustolonia\avalonia-src `
   -Manifest .\consumer\avalonia-app.json
 ```
 
 The cross-platform `build-app.ps1` (PowerShell 7) validates the
-manifest and paths before it runs the producer's
+manifest and paths before it runs Rustolonia's
 `Avalonia.ViewModelProjection.Tool` against consumer outputs. It then runs
 `cargo fmt`, builds consumer AXAML, builds the declared Cargo `--bin`, and
 publishes `Avalonia.Host` with
@@ -80,10 +80,19 @@ re-export `DynamicViewModel`, `ViewModelSink`, `ViewModelBatch`, and
 `BatchCompletion` from `avalonia::view_model`; the shipped template already
 does so.
 Finally it writes the host, published native DLLs/shared libraries, consumer
-executable, `licence.md`, deterministic CycloneDX delivery SBOM, and SHA-256
+executable, the producer's `licence.md`, Rustolonia's `LICENSE` and
+`THIRD-PARTY-NOTICES.txt`, deterministic CycloneDX delivery inventory, and SHA-256
 checksums to the manifest's adjacent output directory. A local
 `AVALONIA_RUST_SIGN_COMMAND` wrapper may sign final binaries before SBOM and
 checksums; it is never downloaded or shell-expanded.
+
+Both packaging entrypoints share `package-shared.ps1`: target mappings, native
+preparation, command construction, native-library copying, signing and checksums.
+Consumer publication uses a unique temporary staging directory, and cleans only
+that invocation's directory. A `.rustolonia-bundle-owner` marker identifies
+disposable output bundles. A nonempty directory without the valid marker is
+rejected rather than erased; choose a new output directory for existing bundles
+created before this ownership mechanism.
 
 Windows MSVC Rust binaries are built with `target-feature=+crt-static`, so the
 adjacent bundle does not require a separately installed Visual C++ runtime.
@@ -101,11 +110,13 @@ previously separate, manually copy-pasted commands from README.md's
    assemblies (`Avalonia.Projection.Tool`).
 2. Regenerate the Rust `avalonia-sys`/`avalonia` bindings from that IR
    (`avalonia-bindgen`), then `cargo fmt --all`.
-3. Regenerate the managed adapters, host view registry, Rust view-model
-   model/sink, and `view-model.contract.md` from the checked-in canonical
-   `view-model.ir.json` (`Avalonia.ViewModelProjection.Tool`).
-4. Build the managed AXAML (`dotnet build` on `Avalonia.Host`, which
-   references `RustViewModelSample.Managed`) and build the Rust workspace
+3. Regenerate the managed adapters, application view registry, Rust
+   view-model API, and `view-model.contract.md` from the sample-owned
+   `rust/avalonia-sample/view-model.ir.json` (`Avalonia.ViewModelProjection.Tool`
+   with `--external-rust`).
+4. Build the code-first host (no sample presentation), then the
+   sample-composed host (`AvaloniaRustPresentationProjects` +
+   `AvaloniaRustViewRegistryFile`), then the Rust workspace
    (`cargo build --workspace`).
 
 ```powershell
@@ -209,12 +220,26 @@ Both produce, for every supported RID:
   finds it with no environment variable.
 - `checksums.sha256` -- a `sha256sum -c`-compatible SHA-256 manifest of every
   other file in the directory, generated last so it never hashes itself.
-- `licence.md` -- the repository licence copied into every delivery bundle.
+- `licence.md`, `LICENSE`, `THIRD-PARTY-NOTICES.txt` -- producer and project
+  licensing notices copied into every delivery bundle.
+- `.rustolonia-bundle-owner` -- the marker authorizing replacement of a previously
+  generated bundle; it is included in the delivery inventory and checksums.
 - `sbom.cdx.json` -- a deterministic CycloneDX 1.5 delivery inventory,
   generated after optional signing and before checksums. It records SHA-256
   hashes for the host, Rust executable, bundled native libraries, and licence;
   it intentionally excludes itself and the checksum manifest to avoid a
-  recursive hash.
+  recursive hash. It also records the resolved third-party dependency graph:
+  NuGet packages from the host's already-restored `project.assets.json` (no
+  network access; `type: "project"` entries such as in-repo project
+  references are excluded) and Cargo crates from `Cargo.lock` (workspace-local
+  crates with no `[source]`, like `avalonia`, are excluded as not third-party).
+  Each resolved dependency is a CycloneDX `library` component with a `purl`
+  (`pkg:nuget/...`/`pkg:cargo/...`). `metadata.properties` records the producer
+  git pin used for the build and, when a dependency source path could not be
+  supplied, an explicit note that dependency data for that ecosystem is
+  unavailable rather than silently omitting it. This is still a delivery
+  inventory of resolved packages and their identities, not a NVD/OSV
+  vulnerability scan or license-compatibility check.
 
 The layout is deterministic: the same RID with the same configuration and
 example always produces the same file set at the same relative paths, which
@@ -233,9 +258,10 @@ an absent target with the corresponding `rustup target add` command:
 | `osx-x64` | `x86_64-apple-darwin` |
 | `osx-arm64` | `aarch64-apple-darwin` |
 
-Linux and macOS packaging require a matching native CPU because their release
-gate starts the packaged binary; this avoids treating a successfully
-cross-compiled but unexecutable binary as a tested release artifact.
+Packaging supports same-OS cross-architecture builds when the required native
+and Rust toolchains are available. Executing a packaged application requires a
+matching native runner. Cross-build artifacts are therefore not evidence of
+native runtime coverage.
 
 ### Signing hook
 
@@ -249,6 +275,10 @@ owns all signer options and identity selection. No shell evaluation or command
 template expansion is performed. If unset, signing is skipped with a message
 explaining how to opt in; either way, the SBOM and checksums describe final
 (optionally signed) bytes.
+
+The entrypoints explicitly identify the application executable, including
+extensionless Linux/macOS binaries. Licensing files and ownership markers are
+not signing inputs. Missing explicitly requested signing inputs fail the build.
 
 ## Source-only crate packaging
 
@@ -268,46 +298,38 @@ cargo package --list -p avalonia-bindgen --allow-dirty
 
 ## SBOM (EU CRA) scope
 
-The repository's CycloneDX SBOM generation (`nukebuild/SbomGenerator.cs`,
-`CreateSbom` target) walks published NuGet packages: for each one it resolves
-the packed assemblies' NuGet dependency graph and, where a package bundles a
-built webapp (Numerge-merged assemblies, npm-built browser bundles), that
-bundled content too. It does not scan arbitrary files on disk, so it does not
-need to be told about something that is never packed into a shipped NuGet
-package.
+Rustolonia does not carry the upstream Avalonia producer's NUKE build or its
+`SbomGenerator.cs`/Numerge infrastructure; none of that exists in this
+repository. Rustolonia is not a NuGet package producer at all: every managed
+project in this repository (`Avalonia.Host`, `Avalonia.Rust`,
+`Avalonia.Rust.Interop`, `Avalonia.Projection.*`,
+`Avalonia.ViewModelProjection.Tool`) is `IsPackable=false`, and the `rust/*`
+crates are `publish = false` (see [Source-only crate
+packaging](#source-only-crate-packaging) above). There is no shipped `.nupkg`
+or published crate for a package-level SBOM generator to cover.
 
-Everything this stage adds stays outside a shipped NuGet package, by design,
-and the checks below are what keep that true instead of assumed:
-
-- **`Avalonia.Host`, `Avalonia.Rust`, `Avalonia.Rust.Interop`,
-  `Avalonia.Projection.*`, `Avalonia.ViewModelProjection.Tool`** remain
-  `IsPackable=false` (unchanged by this stage). None are referenced by
-  `nukebuild/numerge.json`. A project only needs SBOM coverage once it is
-  packed into a published `.nupkg`; do not flip `IsPackable` to `true` for
-  any of these without also giving `nukebuild/SbomGenerator.cs` a way to
-  attribute their dependencies (native libraries, bundled assemblies) to the
-  resulting package first.
-- **The `rust/*` crates** are source only (`publish = false`, see above) and
-  are never vendored as compiled binaries into any NuGet package; they are
-  consumed by `cargo`, entirely outside the NuGet/CycloneDX pipeline.
-- **The `rust/package.ps1` output** (`Avalonia.Host` plus
-  its native dependencies and a Rust binary, per RID) is not a NuGet package
-  and is not produced by this repository's NuGet publish path -- it is a
-  standalone build artifact distributed by whatever channel a consumer of
-  this workflow chooses (for example a GitHub release). Its delivery scope is
-  covered by `sbom.cdx.json`, which inventories exact per-RID files after
-  signing, and by `checksums.sha256`, which covers that SBOM too. This does
-  not change the NuGet SBOM generator because no new packable NuGet project
-  or package delivery dependency is introduced.
-- **Stage 29 desktop file integration** adds only source files to the existing
-  non-packable `Avalonia.Host` and to the source-only `rust/*` crates, plus
-  template metadata snippets that are never compiled or copied into a delivered
-  bundle. No new shipped package, bundled third-party binary, npm/JS content,
-  or Numerge merge group is introduced, so neither `nukebuild/SbomGenerator.cs`
-  nor `rust/generate-sbom.ps1`'s delivery inventory changes.
+What Rustolonia does ship is the packaged NativeAOT bundle produced by
+[`package.ps1`](#deterministic-per-rid-artifact-layout) or `build-app.ps1`
+for an external consumer, and that delivery is what
+[`sbom.cdx.json`](#deterministic-per-rid-artifact-layout) inventories: every
+delivered file's SHA-256 hash, plus the resolved third-party NuGet package
+graph (from the host's already-restored `project.assets.json`) and Cargo
+crate graph (from `Cargo.lock`), each recorded as a CycloneDX component with
+a `purl`. This is a delivery-content and resolved-dependency-identity record,
+not a NuGet-package-level SBOM generator and not a vulnerability or
+license-compatibility scan; treat it as the inventory an EU CRA delivery
+process consumes, not as the whole of that process.
 
 ## Tests
 
+- `pwsh ./rust/tests/test-build-app.ps1` runs quick script-parser, helper,
+  path/ownership, signing, manifest and scaffold regressions without a native
+  build. All fixtures are created in an owned temporary directory.
+- Add `-RunNativeSmoke` to build, package and launch a fresh external consumer
+  for the current OS/architecture. On Linux, run under a display such as
+  `xvfb-run -a pwsh ./rust/tests/test-build-app.ps1 -RunNativeSmoke`. Smoke builds
+  do not invoke a user-configured signing service and clear the host override
+  when launching so that the adjacent packaged host is exercised.
 - `rust/avalonia/src/runtime.rs` (`host_discovery_tests` module) and
   `rust/avalonia/tests/host_discovery.rs` cover `discover_host_path`: the
   explicit override always winning (even to a nonexistent path), the

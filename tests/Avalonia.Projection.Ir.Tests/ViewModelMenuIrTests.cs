@@ -17,7 +17,7 @@ public class ViewModelMenuIrTests
     public void Checked_in_schema_declares_the_stage_thirty_one_command_surfaces()
     {
         var ir = ViewModelIr.FromJson(File.ReadAllText(
-            Path.Combine(FindRepositoryRoot(), "rust", "view-model.ir.json")));
+            Path.Combine(FindRepositoryRoot(), "rust", "avalonia-sample", "view-model.ir.json")));
         var model = ir.Models.Single(candidate => candidate.Name == "SampleViewModel");
 
         Assert.Equal(5, ir.Version);

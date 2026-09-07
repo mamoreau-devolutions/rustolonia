@@ -18,13 +18,15 @@ dispatched to Avalonia's UI thread.
 
 ## Generated application contract
 
-`view-model.ir.json` is the source of truth for model, property, collection,
-command, and view IDs. The generator produces:
+`rust/avalonia-sample/view-model.ir.json` is the source of truth for the
+flagship sample's model, property, collection, command, and view IDs. The
+generator produces:
 
 - typed Rust model traits, sinks, dispatch, and `AppScope::mount_*` methods
+  in the sample-owned `avalonia-sample` crate (`--external-rust`)
 - managed compiled-binding adapters in the presentation project
-- an AOT-rooted host view registry
-- [a readable contract report](view-model.contract.md)
+- an AOT-rooted application view registry next to those adapters
+- [a readable contract report](avalonia-sample/view-model.contract.md)
 
 The handwritten Rust and managed interop layers know only the generic
 transport. Adding an application model or view does not add methods to that
@@ -38,11 +40,16 @@ integers and remain stable when schema entries are reordered.
 
 ## Project boundaries
 
-`Avalonia.Rust.Interop` contains only the neutral generated-COM interfaces.
-`RustViewModelSample.Managed` owns AXAML, its generated adapter, and view
-code-behind. `Avalonia.Host` references presentation assemblies and consumes
-only the generated registry. A product host can replace the sample
-presentation project with its own generated view assemblies.
+`Avalonia.Rust.Interop` and `avalonia` contain only the generic transport,
+descriptors, sinks, and mounting. `avalonia-sample` owns the sample schema,
+generated Rust model API, and contract. `RustViewModelSample.Managed` owns
+AXAML, generated adapters, and `Generated/RustViewRegistry.g.cs`.
+`Avalonia.Host` defaults to a handwritten fallback registry with no sample
+presentation; compose an application with `AvaloniaRustPresentationProjects`
+and `AvaloniaRustViewRegistryFile`. Sample-only types previously reexported
+from `avalonia` (`SampleViewModel`, `mount_rust_vm_window`, …) now live in
+`avalonia-sample`. Example commands are unchanged via a workspace
+dev-dependency.
 
 The adapter detaches the Rust sink when its window closes. Updates already in
 flight are dispatched to the UI thread only while the adapter remains alive;

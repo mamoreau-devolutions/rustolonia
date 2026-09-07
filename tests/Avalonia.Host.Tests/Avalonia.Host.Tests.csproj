@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\host\Avalonia.Host.csproj" />
+    <ProjectReference Include="..\..\host\Avalonia.Host.csproj" AdditionalProperties="AvaloniaRustPresentationProjects=..\samples\RustViewModelSample.Managed\RustViewModelSample.Managed.csproj;AvaloniaRustViewRegistryFile=..\samples\RustViewModelSample.Managed\Generated\RustViewRegistry.g.cs" />
     <ProjectReference Include="..\..\interop\Avalonia.Rust\Avalonia.Rust.csproj" />
     <ProjectReference Include="..\..\samples\RustViewModelSample.Managed\RustViewModelSample.Managed.csproj" />
     <ProjectReference Include="..\..\avalonia-src\tests\Avalonia.UnitTests\Avalonia.UnitTests.csproj" />

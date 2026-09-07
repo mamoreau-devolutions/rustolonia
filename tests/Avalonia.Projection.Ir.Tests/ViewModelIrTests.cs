@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -12,7 +12,7 @@ public class ViewModelIrTests
     [Fact]
     public void Checked_in_schema_is_valid_and_roundtrips()
     {
-        var path = Path.Combine(FindRepositoryRoot(), "rust", "view-model.ir.json");
+        var path = Path.Combine(FindRepositoryRoot(), "rust", "avalonia-sample", "view-model.ir.json");
         var ir = ViewModelIr.FromJson(File.ReadAllText(path));
 
         Assert.Equal(ViewModelIr.CurrentVersion, ir.Version);
@@ -40,7 +40,7 @@ public class ViewModelIrTests
     [Fact]
     public void Table_metadata_validates_nested_paths_selection_and_sort_contract()
     {
-        var ir = ViewModelIr.FromJson(File.ReadAllText(Path.Combine(FindRepositoryRoot(), "rust", "view-model.ir.json")));
+        var ir = ViewModelIr.FromJson(File.ReadAllText(Path.Combine(FindRepositoryRoot(), "rust", "avalonia-sample", "view-model.ir.json")));
         var table = ir.Models.Single(model => model.Name == "SampleViewModel")
             .Collections.Single(collection => collection.Name == "TraceRows").Table!;
 
@@ -81,7 +81,7 @@ public class ViewModelIrTests
     [Fact]
     public void Checked_in_schema_declares_the_stage_thirty_shapes()
     {
-        var ir = ViewModelIr.FromJson(File.ReadAllText(Path.Combine(FindRepositoryRoot(), "rust", "view-model.ir.json")));
+        var ir = ViewModelIr.FromJson(File.ReadAllText(Path.Combine(FindRepositoryRoot(), "rust", "avalonia-sample", "view-model.ir.json")));
         var model = ir.Models.Single(candidate => candidate.Name == "SampleViewModel");
 
         var window = model.Collections.Single(collection => collection.Name == "LogWindow");

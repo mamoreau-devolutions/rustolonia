@@ -643,17 +643,14 @@ public class ComSourceEmitterTests
         var ir = ViewModelIr.FromJson(File.ReadAllText(Path.Combine(
             root,
             "rust",
+            "avalonia-sample",
             "view-model.ir.json")));
         var adapterDirectory = Path.Combine(
             root,
             "samples",
             "RustViewModelSample.Managed",
             "Generated");
-        var registryDirectory = Path.Combine(
-            root,
-            "host",
-            "Generated",
-            "ViewModels");
+        var registryDirectory = adapterDirectory;
 
         foreach (var (name, source) in ViewModelSourceEmitter.EmitCSharp(ir))
         {
@@ -665,11 +662,11 @@ public class ComSourceEmitterTests
                 Normalize(File.ReadAllText(Path.Combine(directory, name))));
         }
         Assert.Equal(
-            Normalize(ViewModelSourceEmitter.EmitRust(ir)),
+            Normalize(ViewModelSourceEmitter.EmitRust(ir, externalConsumer: true)),
             Normalize(File.ReadAllText(Path.Combine(
                 root,
                 "rust",
-                "avalonia",
+                "avalonia-sample",
                 "src",
                 "generated_view_models.rs"))));
         Assert.Equal(
@@ -677,6 +674,7 @@ public class ComSourceEmitterTests
             Normalize(File.ReadAllText(Path.Combine(
                 root,
                 "rust",
+                "avalonia-sample",
                 "view-model.contract.md"))));
     }
 

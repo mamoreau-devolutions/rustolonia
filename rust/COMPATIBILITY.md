@@ -5,11 +5,23 @@ workspace are released in semver lockstep from one source revision. The crates
 are `publish = false`; consumers must not mix a host or generated bindings from
 one release with crates from another release.
 
+[`rust/release-manifest.json`](release-manifest.json) is the single
+machine-readable record tying that lockstep release together: the Rustolonia
+version, the exact pinned producer commit, the additive producer patch set
+(by file and content hash), and every independently-versioned schema this
+repository publishes (`projection.ir.json`, the view-model IR, the released
+ABI baseline, and the external consumer manifest). A test
+(`ReleaseManifestTests`) fails closed if the manifest drifts from any of
+those actual sources of truth, so bumping one schema or patch without
+updating the manifest is caught rather than silently accepted.
+
 ## Generated IR
 
-`projection.ir.json` and `view-model.ir.json` are versioned schemas. A
-generator change must regenerate all checked-in managed, Rust, and contract
-outputs in the same change. Additive, optional schema fields require a schema
+`projection.ir.json` (framework object model) and
+`rust/avalonia-sample/view-model.ir.json` (sample/application schema) are
+versioned schemas. A generator change must regenerate all checked-in managed,
+Rust, and contract outputs in the same change. Sample-only Rust API that used
+to be reexported from `avalonia` now lives in `avalonia-sample`. Additive, optional schema fields require a schema
 version bump and readers that reject unsupported future versions clearly.
 Removing or changing the meaning, type, ordering, or requiredness of an
 existing field is breaking and requires a coordinated major release.
@@ -80,6 +92,33 @@ A producer or host that predates an optional capability must report
 acceptable degradation.
 Any unavoidable incompatible ABI change requires a new host ABI generation and
 a coordinated major release.
+
+The frozen released C ABI snapshot is [`abi-baseline.json`](abi-baseline.json)
+(`kind: released`, schema version 3). It records producer pin, ABI typedef and
+macro expansions (`AvnHResult` → `int32_t`, `AVN_CALL` → `__stdcall` on
+Windows and empty elsewhere, struct packing default), interned callable slot
+templates, value-struct layouts, and flattened IR lineage fingerprints for each
+released identity. New current identities are allowed; the gate only requires
+every released IID to keep its contract. `projectionIrVersion` in the snapshot
+is provenance, not a live lock against `ProjectionIr.CurrentVersion`.
+
+The pointer spelling in a slot (`const T*`, `T**`) is indirection and
+constness only. It does not encode COM lifetime, free-ownership, or
+allocator contracts; those remain outside this gate. Duplicate value-type
+records, duplicate IIDs, and IID-constant/vtable-name mismatches fail closed
+instead of associating the next marker.
+
+The current header plus IR are an appendable inventory. Changing a resolved
+typedef/macro, a parameter type, a flattened IR kind/direction/nullability
+including inherited members, a value-struct layout, `abiVersion`, or name
+under an unchanged IID is a break.
+
+Intentional ABI-generation transitions retire identities instead of reusing
+them: add the old IID to `retiredIdentities` with the replacement name/reason,
+publish the successor under a new IID, and never reuse the retired GUID.
+Missing a retired IID is expected; seeing it again on a live interface is a
+reuse break. Update the released snapshot in the same change that adds a new
+identity or completes a documented retirement.
 
 The generated object model (`IAvnControl` and friends) is versioned by the
 `abiVersion` recorded per interface in `projection.ir.json`, which is hashed

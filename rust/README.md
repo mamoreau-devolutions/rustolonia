@@ -102,7 +102,7 @@ To run an example:
 
 ```powershell
 $env:AVN_HOST_NATIVE_LIB = (Resolve-Path `
-  .\src\Avalonia.Host\bin\Release\net10.0\win-x64\publish\Avalonia.Host.dll)
+  .\host\bin\Release\net10.0\win-x64\publish\Avalonia.Host.dll)
 cargo run --manifest-path .\rust\Cargo.toml -p avalonia --example hello_world
 ```
 
@@ -154,9 +154,9 @@ run every step below plus the managed and Rust builds; the commands here
 are what it runs, spelled out for anyone changing the pipeline itself:
 
 ```powershell
-dotnet run --project .\src\Avalonia.Projection.Tool `
+dotnet run --project .\projection\Avalonia.Projection.Tool `
   -- .\rust\projection.ir.json `
-  .\src\Avalonia.Host\Generated\ObjectModel `
+  .\host\Generated\ObjectModel `
   .\rust\avalonia-sys\include\avalonia-rust-abi.h
 
 Push-Location .\rust
@@ -167,16 +167,17 @@ cargo run -p avalonia-bindgen -- `
 cargo fmt --all
 Pop-Location
 
-dotnet run --project .\src\Avalonia.ViewModelProjection.Tool -- `
-  .\rust\view-model.ir.json `
+dotnet run --project .\projection\Avalonia.ViewModelProjection.Tool -- `
+  .\rust\avalonia-sample\view-model.ir.json `
   .\samples\RustViewModelSample.Managed\Generated `
-  .\src\Avalonia.Host\Generated\ViewModels `
-  .\rust\avalonia\src\generated_view_models.rs `
-  .\rust\view-model.contract.md
+  .\samples\RustViewModelSample.Managed\Generated `
+  .\rust\avalonia-sample\src\generated_view_models.rs `
+  .\rust\avalonia-sample\view-model.contract.md `
+  --external-rust
 ```
 
 Public control coverage is declared in
-`src\Avalonia.Projection.Ir\AvaloniaProjectionProfiles.cs`. Unsupported
+`projection\Avalonia.Projection.Ir\AvaloniaProjectionProfiles.cs`. Unsupported
 members remain visible in `projection.ir.gaps.txt`. New samples must widen
 that shared policy and the generators when blocked; sample-specific host
 bindings are not accepted.

@@ -3,15 +3,16 @@
 First-class Rust bindings for [Avalonia](https://avaloniaui.net/), projected
 over a nano-COM ABI served by a NativeAOT host. This repository contains the
 complete bindings effort; the Avalonia framework itself is consumed from the
-pinned `avalonia-src` producer submodule.
+pinned `avalonia-src` producer submodule at commit
+`9654332a79f637473da96054f75b2a16deaa557e`.
 
 ## Layout
 
 | Directory | Contents |
 |---|---|
-| `avalonia-src/` | Git submodule: AvaloniaUI/Avalonia pinned to release tag `12.1.2` |
+| `avalonia-src/` | Avalonia producer pinned to `9654332a79f637473da96054f75b2a16deaa557e`, currently cloned from the `mamoreau-devolutions/Avalonia` fork |
 | `avalonia-patches/` | Additive framework patches applied onto the pinned checkout (see its README + UPSTREAM.md) |
-| `rust/` | The Rust workspace: `avalonia` (safe bindings), `avalonia-sys` (ABI bindings), `avalonia-bindgen` (IR to Rust generator), templates, build scripts, and the checked-in IR |
+| `rust/` | The Rust workspace: `avalonia` (safe bindings), `avalonia-sys` (ABI bindings), `avalonia-bindgen` (IR to Rust generator), `avalonia-sample` (flagship sample's application-owned view-model API), templates, build scripts, and the checked-in IR |
 | `host/` | `Avalonia.Host` - the C# NativeAOT host that serves the ABI, plus its generated object model |
 | `projection/` | The projection pipeline: IR extraction, C#/header emitters, and the generator tools |
 | `interop/` | `Avalonia.Rust` and `Avalonia.Rust.Interop` - the managed-side view-model interop layer |
@@ -29,18 +30,42 @@ pwsh ./rust/regenerate-and-build.ps1 -Configuration Release
 ```
 
 The regeneration pipeline (IR, generated C#, native header, Rust bindings) is
-deterministic; CI fails if regenerating changes the checkout.
+deterministic; CI fails if regenerating changes the checkout. Generated outputs
+have checked-in ownership manifests so stale cleanup does not erase another
+generator's files. Generator CLIs also provide non-mutating `--check` modes.
+
+Open `Rustolonia.slnx` for the managed projects. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the contributor workflow and code-generation
+boundaries.
 
 ## Creating a new app
 
 ```pwsh
-pwsh ./rust/new-app.ps1 -Name my_app -Destination ../my_app -ProducerRoot ./avalonia-src
+pwsh ./rust/new-app.ps1 -Name my_app -Destination ../my_app -ProducerRoot ./avalonia-src -RustoloniaRoot .
 ```
+
+The generated app keeps the producer root and Rustolonia root separate, allows
+paths with spaces, and validates the declared roots before writing any files.
 
 ## CI
 
-`.github/workflows/avalonia-rust.yml` builds and tests the full matrix
-(win/linux/osx, x64/arm64): applies the producer patches after checkout, runs
-the managed suites, publishes the NativeAOT host, runs the cargo workspace
-tests, builds and packages the flagship samples, and smoke-tests the packaged
-artifacts.
+`.github/workflows/avalonia-rust.yml` keeps the native release and cross-build
+gates running automatically on pull requests and pushes to `main`. Native
+execution covers Windows/Linux x64 and macOS x64/arm64; Windows/Linux arm64
+have cross-build packaging coverage, not native execution coverage. The
+original flagship samples remain part of the release gate.
+
+The quick helper/scaffold suite does not build or launch an application:
+
+```pwsh
+pwsh ./rust/tests/test-build-app.ps1
+```
+
+Native jobs additionally build and launch a fresh external consumer:
+
+```pwsh
+pwsh ./rust/tests/test-build-app.ps1 -RunNativeSmoke
+```
+
+Linux native smoke execution needs a display, for example
+`xvfb-run -a pwsh ./rust/tests/test-build-app.ps1 -RunNativeSmoke`.

@@ -7,7 +7,19 @@ namespace Avalonia.Projection.Ir;
 
 public static class ClrTypeExtractor
 {
-    private static readonly NullabilityInfoContext Nullability = new();
+    // NullabilityInfoContext caches per-module nullable-attribute state on an
+    // instance-level dictionary that is not safe to mutate concurrently: two
+    // threads calling Create() on the SAME shared instance at once can throw
+    // "An item with the same key has already been added" from its internal
+    // cache (this is why a single process-wide static instance previously
+    // failed intermittently under parallel test execution). A [ThreadStatic]
+    // field still reuses one instance across every call made from a single
+    // thread (preserving the caching benefit for a sequential extraction
+    // pass) while guaranteeing no two threads ever touch the same instance.
+    [ThreadStatic]
+    private static NullabilityInfoContext? _nullability;
+
+    private static NullabilityInfoContext Nullability => _nullability ??= new NullabilityInfoContext();
 
     public static ProjectionIr Extract(IEnumerable<Type> sourceTypes, ProjectionPolicy policy)
     {

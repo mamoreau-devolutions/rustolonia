@@ -15,37 +15,14 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
+. (Join-Path $PSScriptRoot 'package-shared.ps1')
 
-$script:RidTargets = @{
-    'win-x64'     = @{ Triple = 'x86_64-pc-windows-msvc'; Platform = 'Win32'; HostExtension = '.dll'; ExeExtension = '.exe' }
-    'win-arm64'   = @{ Triple = 'aarch64-pc-windows-msvc'; Platform = 'Win32'; HostExtension = '.dll'; ExeExtension = '.exe' }
-    'linux-x64'   = @{ Triple = 'x86_64-unknown-linux-gnu'; Platform = 'X11'; HostExtension = '.so'; ExeExtension = '' }
-    'linux-arm64' = @{ Triple = 'aarch64-unknown-linux-gnu'; Platform = 'X11'; HostExtension = '.so'; ExeExtension = '' }
-    'osx-x64'     = @{ Triple = 'x86_64-apple-darwin'; Platform = 'OSX'; HostExtension = '.dylib'; ExeExtension = '' }
-    'osx-arm64'   = @{ Triple = 'aarch64-apple-darwin'; Platform = 'OSX'; HostExtension = '.dylib'; ExeExtension = '' }
-}
 $script:PathFields = @(
     'presentationProject', 'viewModelIr', 'generatedAdaptersDirectory',
     'generatedRegistryFile', 'generatedRustFile', 'generatedContractFile',
     'cargoManifest', 'outputDirectory'
 )
 $script:Required = @('version') + $script:PathFields[0..6] + @('packageName', 'rid', 'configuration', 'outputDirectory')
-
-function Invoke-Logged {
-    param([Parameter(Mandatory)][string[]]$Command, [string]$WorkingDirectory)
-    Write-Host "==> $($Command -join ' ')"
-    $exe = $Command[0]
-    $args = @()
-    if ($Command.Length -gt 1) { $args = $Command[1..($Command.Length - 1)] }
-    if ($WorkingDirectory) {
-        Push-Location $WorkingDirectory
-        try { & $exe @args }
-        finally { Pop-Location }
-    }
-    else {
-        & $exe @args
-    }
-}
 
 function Resolve-ManifestPath {
     param($ManifestDirectory, [string]$Value)
@@ -95,39 +72,14 @@ function Read-ConsumerManifest {
     return $document
 }
 
-function Set-WindowsStaticCrt {
-    param([string]$Triple)
-    if (-not $Triple.EndsWith('-pc-windows-msvc')) { return }
-    $key = "CARGO_TARGET_$($Triple.ToUpperInvariant().Replace('-', '_'))_RUSTFLAGS"
-    $required = '-C target-feature=+crt-static'
-    $current = [Environment]::GetEnvironmentVariable($key, 'Process')
-    if ([string]::IsNullOrWhiteSpace($current)) { $current = '' }
-    if ($current -notlike "*$required*") {
-        [Environment]::SetEnvironmentVariable($key, "$($current.Trim()) $required".Trim(), 'Process')
-    }
-}
-
-function Write-Checksums {
-    param([string]$Bundle)
-    $lines = @(
-        Get-ChildItem -LiteralPath $Bundle -File |
-            Where-Object { $_.Name -ne 'checksums.sha256' } |
-            Sort-Object Name |
-            ForEach-Object {
-                $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-                "$hash *$($_.Name)"
-            }
-    )
-    [System.IO.File]::WriteAllLines((Join-Path $Bundle 'checksums.sha256'), $lines, [System.Text.UTF8Encoding]::new($false))
-}
-
 function Invoke-ConsumerPackage {
     param([string]$ProducerRootPath, $Document)
     $paths = $Document._paths
     $rid = [string]$Document.rid
-    $target = $script:RidTargets[$rid]
-    $hostProject = Join-Path (Resolve-Path $RustoloniaRoot).Path 'host' 'Avalonia.Host.csproj'
-    $projectionTool = Join-Path (Resolve-Path $RustoloniaRoot).Path 'projection' 'Avalonia.ViewModelProjection.Tool' 'Avalonia.ViewModelProjection.Tool.csproj'
+    $target = Get-RidTargetInfo -Rid $rid
+    $rustoloniaRootPath = (Resolve-Path -LiteralPath $RustoloniaRoot).Path
+    $hostProject = Join-Path $rustoloniaRootPath 'host' 'Avalonia.Host.csproj'
+    $projectionTool = Join-Path $rustoloniaRootPath 'projection' 'Avalonia.ViewModelProjection.Tool' 'Avalonia.ViewModelProjection.Tool.csproj'
     $licenseFile = Join-Path $ProducerRootPath 'licence.md'
     foreach ($pair in @(
             @{ Path = $hostProject; Name = 'Avalonia.Host project' },
@@ -152,26 +104,22 @@ function Invoke-ConsumerPackage {
         )
     }
 
+    Ensure-RidPrerequisites -Rid $rid -ProducerRoot $ProducerRootPath -Configuration ([string]$Document.configuration)
+
     Invoke-Logged -Command @('cargo', 'fmt', '--manifest-path', $paths.cargoManifest)
     Invoke-Logged -Command @(
         'dotnet', 'build', $paths.presentationProject, '-c', [string]$Document.configuration,
-        "-p:AvaloniaProducerRoot=$ProducerRootPath"
+        "-p:AvaloniaProducerRoot=$ProducerRootPath",
+        "-p:RustoloniaRoot=$rustoloniaRootPath"
     )
 
     $cargoTarget = Join-Path $Document._manifestDirectory '.avalonia' 'cargo-target'
     $previousCargo = [Environment]::GetEnvironmentVariable('CARGO_TARGET_DIR', 'Process')
     [Environment]::SetEnvironmentVariable('CARGO_TARGET_DIR', $cargoTarget, 'Process')
-    Set-WindowsStaticCrt $target.Triple
+    Set-WindowsStaticCrt -Triple $target.Triple
     try {
-        $cargoArgs = @(
-            'cargo', 'build', '--manifest-path', $paths.cargoManifest, '-p', [string]$Document.packageName,
-            '--bin', [string]$Document.binary, '--target', $target.Triple
-        )
-        $profile = 'debug'
-        if ($Document.configuration -eq 'Release') {
-            $cargoArgs += '--release'
-            $profile = 'release'
-        }
+        $cargoArgs = New-CargoBuildCommand -ManifestPath $paths.cargoManifest -PackageName $Document.packageName -BinaryName $Document.binary -TargetTriple $target.Triple -Configuration $Document.configuration
+        $profile = if ($Document.configuration -eq 'Release') { 'release' } else { 'debug' }
         Invoke-Logged -Command $cargoArgs
     }
     finally {
@@ -183,42 +131,36 @@ function Invoke-ConsumerPackage {
     }
 
     $bundle = $paths.outputDirectory
-    $staging = Join-Path (Split-Path -Parent $bundle) ".$([IO.Path]::GetFileName($bundle)).avalonia-staging"
-    if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
-    New-Item -ItemType Directory -Force -Path $staging | Out-Null
+    $staging = New-IsolatedPackageStagingRoot -OutputRoot (Split-Path -Parent $bundle) -Rid $rid
     try {
-        Invoke-Logged -WorkingDirectory $ProducerRootPath -Command @(
-            'dotnet', 'publish', $hostProject, '-c', [string]$Document.configuration, '-r', $rid,
-            "-p:AvaloniaRustHostPlatform=$($target.Platform)",
+        $publishProperties = New-HostPublishProperties -ProducerRoot $ProducerRootPath -RustoloniaRoot $rustoloniaRootPath -Rid $rid -HostPlatform $($target.Platform)
+        $publishProperties += @(
             "-p:AvaloniaRustPresentationProjects=$($paths.presentationProject)",
             "-p:AvaloniaRustViewRegistryFile=$($paths.generatedRegistryFile)",
             "-p:PublishDir=$staging"
         )
+        $publishCommand = @('dotnet', 'publish', $hostProject, '-c', [string]$Document.configuration, '-r', $rid) + $publishProperties
+        Invoke-Logged -WorkingDirectory $ProducerRootPath -Command $publishCommand
         $hostFile = Join-Path $staging "Avalonia.Host$($target.HostExtension)"
         if (-not (Test-Path -LiteralPath $hostFile -PathType Leaf)) {
             throw "NativeAOT host was not produced: $hostFile"
         }
-        if (Test-Path -LiteralPath $bundle) { Remove-Item -LiteralPath $bundle -Recurse -Force }
-        New-Item -ItemType Directory -Force -Path $bundle | Out-Null
-        Copy-Item -LiteralPath $hostFile -Destination (Join-Path $bundle (Split-Path -Leaf $hostFile))
-        $copyExtension = if ($target.HostExtension -eq '.dll') { '.dll' } else { $target.HostExtension }
-        Get-ChildItem -LiteralPath $staging -File -Filter "*$copyExtension" | ForEach-Object {
-            Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $bundle $_.Name)
-        }
+        Prepare-ArtifactBundle -BundlePath $bundle | Out-Null
+        Copy-BundleFiles -SourceDirectory $staging -DestinationDirectory $bundle -HostFile $hostFile -Rid $rid
         Copy-Item -LiteralPath $executable -Destination (Join-Path $bundle (Split-Path -Leaf $executable))
-        Copy-Item -LiteralPath $licenseFile -Destination (Join-Path $bundle 'licence.md')
-
-        if ($env:AVALONIA_RUST_SIGN_COMMAND) {
-            if (-not (Test-Path -LiteralPath $env:AVALONIA_RUST_SIGN_COMMAND -PathType Leaf)) {
-                throw 'AVALONIA_RUST_SIGN_COMMAND must name a trusted signing wrapper file'
-            }
-            Get-ChildItem -LiteralPath $bundle -File |
-                Where-Object { $_.Extension -in @('.dll', '.exe', '.so', '.dylib') } |
-                ForEach-Object { Invoke-Logged -Command @($env:AVALONIA_RUST_SIGN_COMMAND, $_.FullName) }
-        }
-
-        & (Join-Path $PSScriptRoot 'generate-sbom.ps1') -Rid $rid -Bundle $bundle
-        Write-Checksums $bundle
+        Copy-BundleNotices -ProducerRoot $ProducerRootPath -RustoloniaRoot $rustoloniaRootPath -DestinationDirectory $bundle
+        $signTargets = @(
+            (Join-Path $bundle (Split-Path -Leaf $executable)),
+            (Join-Path $bundle (Split-Path -Leaf $hostFile))
+        )
+        Invoke-ArtifactSigning -ArtifactDirectory $bundle -SignCommand $env:AVALONIA_RUST_SIGN_COMMAND -ExplicitFiles $signTargets
+        $consumerProducerPin = git -C $ProducerRootPath rev-parse HEAD 2>$null
+        $consumerHostAssets = Join-Path $rustoloniaRootPath 'host' 'obj' 'project.assets.json'
+        & (Join-Path $PSScriptRoot 'generate-sbom.ps1') -Rid $rid -Bundle $bundle `
+            -CargoLockPath (Split-Path -Parent $paths.cargoManifest | Join-Path -ChildPath 'Cargo.lock') `
+            -ProjectAssetsJsonPath $consumerHostAssets `
+            -ProducerPin $consumerProducerPin
+        Write-Checksums -Bundle $bundle
     }
     finally {
         if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }

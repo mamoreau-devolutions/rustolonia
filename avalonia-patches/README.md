@@ -2,8 +2,8 @@
 
 Additive patches against the [Avalonia UI framework](https://github.com/AvaloniaUI/Avalonia)
 that rustolonia's NativeAOT host and projected TableView surface depend on.
-They are meant to be applied to the `avalonia-src` submodule checkout
-(pinned to a release tag) by `apply-avalonia-patches.ps1`.
+They are meant to be applied to the `avalonia-src` submodule checkout pinned at
+`9654332a79f637473da96054f75b2a16deaa557e` by `apply-avalonia-patches.ps1`.
 
 | Patch | Contents |
 |---|---|
@@ -12,21 +12,19 @@ They are meant to be applied to the `avalonia-src` submodule checkout
 ## Usage
 
 ```pwsh
-# after cloning submodules (avalonia-src pinned to a release tag)
+# after cloning submodules (avalonia-src pinned to Rustolonia's producer SHA)
 pwsh ./apply-avalonia-patches.ps1 -AvaloniaRoot ../avalonia-src
 
-# CI / after bumping the submodule to a newer tag
-pwsh ./apply-avalonia-patches.ps1 -AvaloniaRoot ../avalonia-src -Check
-
-# CI / after bumping the submodule to a newer tag
+# CI / after bumping the submodule to a newer producer SHA
 pwsh ./apply-avalonia-patches.ps1 -AvaloniaRoot ../avalonia-src -Check
 ```
 
 Applying is idempotent: an already-patched checkout is detected and skipped.
 
-Validated producers: the patch applies cleanly to upstream tag `12.1.2`
-(2026-09-02) and to `origin/main` as of 2026-09-05; the patched 12.1.2
-checkout builds and its full `Avalonia.Controls.UnitTests` suite passes.
+Validated producer: the patch applies cleanly to the pinned checkout at
+`9654332a79f637473da96054f75b2a16deaa557e`; the patched producer build and the
+relevant `Avalonia.Controls.UnitTests` suite remain the expected baseline for
+Rustolonia's compatibility work.
 
 ## Maintenance
 

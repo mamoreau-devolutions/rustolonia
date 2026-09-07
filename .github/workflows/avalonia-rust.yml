@@ -16,6 +16,19 @@ permissions:
   contents: read
 
 jobs:
+  quick-checks:
+    name: helper and scaffold checks
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run helper and scaffold regressions without native builds
+        shell: pwsh
+        run: ./rust/tests/test-build-app.ps1
+
   release-gate:
     name: ${{ matrix.rid }}
     runs-on: ${{ matrix.os }}
@@ -67,15 +80,17 @@ jobs:
             'projection/Avalonia.ViewModelProjection.Tool/Avalonia.ViewModelProjection.Tool.csproj',
             'avalonia-src/src/Avalonia.Build.Tasks/Avalonia.Build.Tasks.csproj'
           )
+          $delays = @(15, 30, 60, 90, 120)
           foreach ($project in $projects) {
             $attempt = 0
             while ($true) {
               $attempt++
               dotnet restore $project
               if ($LASTEXITCODE -eq 0) { break }
-              if ($attempt -ge 4) { throw "restore failed after $attempt attempts: $project" }
-              Write-Host "restore of $project failed (attempt $attempt); retrying in 15s"
-              Start-Sleep -Seconds 15
+              if ($attempt -gt $delays.Length) { throw "restore failed after $attempt attempts: $project" }
+              $delay = $delays[$attempt - 1]
+              Write-Host "restore of $project failed (attempt $attempt); retrying in ${delay}s"
+              Start-Sleep -Seconds $delay
             }
           }
 
@@ -102,15 +117,32 @@ jobs:
             -project avalonia-src/native/Avalonia.Native/src/OSX/Avalonia.Native.OSX.xcodeproj/ \
             -configuration Release \
             ARCHS="${{ runner.arch == 'ARM64' && 'arm64' || 'x86_64' }}" \
-            "CONFIGURATION_BUILD_DIR=$GITHUB_WORKSPACE/Build/Products/Release"
+            "CONFIGURATION_BUILD_DIR=$GITHUB_WORKSPACE/avalonia-src/Build/Products/Release"
 
       - name: Run managed host and generator tests
         shell: pwsh
         run: |
-          dotnet test tests/Avalonia.Host.Tests/Avalonia.Host.Tests.csproj -c Release
-          dotnet test tests/Avalonia.Projection.Generator.Tests/Avalonia.Projection.Generator.Tests.csproj -c Release
-          dotnet test tests/Avalonia.Projection.Ir.Tests/Avalonia.Projection.Ir.Tests.csproj -c Release
+          $projects = @(
+            'tests/Avalonia.Host.Tests/Avalonia.Host.Tests.csproj',
+            'tests/Avalonia.Projection.Generator.Tests/Avalonia.Projection.Generator.Tests.csproj',
+            'tests/Avalonia.Projection.Ir.Tests/Avalonia.Projection.Ir.Tests.csproj'
+          )
+          foreach ($project in $projects) {
+            & dotnet test $project -c Release
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
           pwsh ./rust/tests/test-build-app.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build and launch a fresh external consumer
+        if: runner.os != 'Linux'
+        shell: pwsh
+        run: ./rust/tests/test-build-app.ps1 -RunNativeSmoke
+
+      - name: Build and launch a fresh external consumer under Xvfb
+        if: runner.os == 'Linux'
+        shell: bash
+        run: xvfb-run -a pwsh -NoProfile -File ./rust/tests/test-build-app.ps1 -RunNativeSmoke
 
       - name: Publish NativeAOT host and run cargo workspace tests
         shell: pwsh
@@ -120,11 +152,13 @@ jobs:
         shell: pwsh
         run: |
           cargo build --manifest-path rust/Cargo.toml -p avalonia --example rust_vm_axaml --release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo build --manifest-path rust/Cargo.toml -p avalonia --example rust_dynamic_vm_axaml --release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Package NativeAOT sample artifacts
         shell: pwsh
-        run: ./rust/package.ps1 -Rid ${{ matrix.rid }} -Configuration Release -Example rust_vm_axaml
+        run: ./rust/package.ps1 -Rid ${{ matrix.rid }} -Configuration Release -Example rust_vm_axaml -PresentationProject samples/RustViewModelSample.Managed/RustViewModelSample.Managed.csproj -ViewRegistryFile samples/RustViewModelSample.Managed/Generated/RustViewRegistry.g.cs
 
       - name: Verify package checksums
         shell: pwsh
@@ -230,14 +264,16 @@ jobs:
         shell: pwsh
         run: |
           $project = 'avalonia-src/src/Avalonia.Build.Tasks/Avalonia.Build.Tasks.csproj'
+          $delays = @(15, 30, 60, 90, 120)
           $attempt = 0
           while ($true) {
             $attempt++
             dotnet restore $project
             if ($LASTEXITCODE -eq 0) { break }
-            if ($attempt -ge 4) { throw "restore failed after $attempt attempts: $project" }
-            Write-Host "restore of $project failed (attempt $attempt); retrying in 15s"
-            Start-Sleep -Seconds 15
+            if ($attempt -gt $delays.Length) { throw "restore failed after $attempt attempts: $project" }
+            $delay = $delays[$attempt - 1]
+            Write-Host "restore of $project failed (attempt $attempt); retrying in ${delay}s"
+            Start-Sleep -Seconds $delay
           }
 
       - name: Build the producer's build tasks
@@ -246,7 +282,7 @@ jobs:
 
       - name: Cross-package NativeAOT sample artifacts
         shell: pwsh
-        run: ./rust/package.ps1 -Rid ${{ matrix.rid }} -Configuration Release -Example rust_vm_axaml
+        run: ./rust/package.ps1 -Rid ${{ matrix.rid }} -Configuration Release -Example rust_vm_axaml -PresentationProject samples/RustViewModelSample.Managed/RustViewModelSample.Managed.csproj -ViewRegistryFile samples/RustViewModelSample.Managed/Generated/RustViewRegistry.g.cs
 
       - name: Verify package checksums
         shell: pwsh

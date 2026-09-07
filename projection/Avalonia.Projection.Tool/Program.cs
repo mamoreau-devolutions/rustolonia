@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Avalonia;
@@ -6,10 +7,14 @@ using Avalonia.Controls;
 using Avalonia.Projection.Generator;
 using Avalonia.Projection.Ir;
 
+var checkMode = args.Length > 0 && args[0] == "--check";
+if (checkMode)
+    args = args[1..];
+
 if (args.Length is not (2 or 3))
 {
     Console.Error.WriteLine(
-        "Usage: Avalonia.Projection.Tool <ir-output> <csharp-output-directory> [native-header-output]");
+        "Usage: Avalonia.Projection.Tool [--check] <ir-output> <csharp-output-directory> [native-header-output]");
     return 2;
 }
 
@@ -18,27 +23,38 @@ var sourceTypes = typeof(AvaloniaObject).Assembly.GetExportedTypes()
 var ir = ClrTypeExtractor.Extract(sourceTypes, AvaloniaProjectionProfiles.ObjectModelKernel);
 var irPath = Path.GetFullPath(args[0]);
 var csharpDirectory = Path.GetFullPath(args[1]);
+var expectedFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-Directory.CreateDirectory(Path.GetDirectoryName(irPath)!);
-Directory.CreateDirectory(csharpDirectory);
-File.WriteAllText(irPath, ir.ToJson().Replace(Environment.NewLine, "\n") + "\n");
-
-foreach (var existing in Directory.EnumerateFiles(csharpDirectory, "*.g.cs"))
-    File.Delete(existing);
 foreach (var (name, source) in ComSourceEmitter.Emit(ir))
-    File.WriteAllText(Path.Combine(csharpDirectory, name), source.Replace(Environment.NewLine, "\n"));
+    OwnedOutputs.Add(expectedFiles, Path.Combine(csharpDirectory, name), source.Replace(Environment.NewLine, "\n"));
+
+var reportPath = Path.ChangeExtension(irPath, ".gaps.txt");
+var reportText = string.Join("\n", ir.Skipped.Select(s => $"{s.Owner}.{s.Member}: {s.Reason}")) + "\n";
+
+OwnedOutputs.Add(expectedFiles, irPath, ir.ToJson().Replace(Environment.NewLine, "\n") + "\n");
+OwnedOutputs.Add(expectedFiles, reportPath, reportText);
 
 if (args.Length == 3)
 {
     var headerPath = Path.GetFullPath(args[2]);
-    Directory.CreateDirectory(Path.GetDirectoryName(headerPath)!);
-    File.WriteAllText(headerPath, NativeHeaderEmitter.Emit(ir).Replace(Environment.NewLine, "\n"));
+    OwnedOutputs.Add(expectedFiles, headerPath, NativeHeaderEmitter.Emit(ir).Replace(Environment.NewLine, "\n"));
 }
 
-var reportPath = Path.ChangeExtension(irPath, ".gaps.txt");
-File.WriteAllText(
-    reportPath,
-    string.Join("\n", ir.Skipped.Select(s => $"{s.Owner}.{s.Member}: {s.Reason}")) + "\n");
+if (checkMode)
+{
+    var result = OwnedOutputs.Check(OwnedOutputs.ProjectionGeneratorId, expectedFiles);
+    if (result.Success)
+    {
+        Console.WriteLine($"Generation check passed for {expectedFiles.Count} output file(s).");
+        return 0;
+    }
+
+    foreach (var mismatch in result.Mismatches)
+        Console.Error.WriteLine(mismatch);
+    return 1;
+}
+
+OwnedOutputs.Write(OwnedOutputs.ProjectionGeneratorId, expectedFiles);
 
 Console.WriteLine($"Generated {ir.Types.Count} projected types and {ir.Skipped.Count} gap entries.");
 return 0;

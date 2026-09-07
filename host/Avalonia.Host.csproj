@@ -15,8 +15,7 @@
     <EnableRuntimeMarshalling>true</EnableRuntimeMarshalling>
     <UseMicroCom>true</UseMicroCom>
     <UseMicroComGeneratorRoslyn>true</UseMicroComGeneratorRoslyn>
-    <!-- Consumers replace these two inputs when publishing a NativeAOT host. -->
-    <AvaloniaRustPresentationProjects Condition="'$(AvaloniaRustPresentationProjects)' == ''">..\samples\RustViewModelSample.Managed\RustViewModelSample.Managed.csproj</AvaloniaRustPresentationProjects>
+    <!-- Code-first host default: no sample presentation. Apps supply AvaloniaRustPresentationProjects and AvaloniaRustViewRegistryFile. -->
     <AvaloniaRustHostPlatform Condition="'$(AvaloniaRustHostPlatform)' == '' and $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win-'))">Win32</AvaloniaRustHostPlatform>
     <AvaloniaRustHostPlatform Condition="'$(AvaloniaRustHostPlatform)' == '' and $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('linux-'))">X11</AvaloniaRustHostPlatform>
     <AvaloniaRustHostPlatform Condition="'$(AvaloniaRustHostPlatform)' == '' and $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-'))">OSX</AvaloniaRustHostPlatform>
@@ -32,37 +31,54 @@
            Text="AvaloniaRustHostPlatform must be Win32, X11, or OSX for runtime identifier '$(RuntimeIdentifier)'." />
   </Target>
   <Target Name="ValidateAvaloniaRustConsumerInputs" BeforeTargets="PrepareForBuild">
-    <Error Condition="'@(AvaloniaRustPresentationProject)' == ''"
-           Text="AvaloniaRustPresentationProjects must contain at least one managed presentation project." />
-    <Error Condition="!Exists('%(AvaloniaRustPresentationProject.Identity)')"
+    <Error Condition="'@(AvaloniaRustPresentationProject)' != '' and !Exists('%(AvaloniaRustPresentationProject.Identity)')"
            Text="AvaloniaRustPresentationProjects contains a project that does not exist: '%(AvaloniaRustPresentationProject.Identity)'." />
     <Error Condition="'$(AvaloniaRustViewRegistryFile)' != '' and !Exists('$(AvaloniaRustViewRegistryFile)')"
            Text="AvaloniaRustViewRegistryFile does not exist: '$(AvaloniaRustViewRegistryFile)'." />
   </Target>
+  <!--
+    Strip host-composition-only properties (AvaloniaRustPresentationProjects,
+    AvaloniaRustViewRegistryFile) from EVERY downstream reference below.
+    Without this, a project that references host with these properties
+    supplied via AdditionalProperties (e.g. tests/Avalonia.Host.Tests.csproj,
+    which also references some of these same producer/interop projects
+    directly) causes MSBuild to see two distinct global-property sets for the
+    shared subtree, and can build both concurrently, racing to write the same
+    output files (observed as sporadic "the process cannot access the file"
+    failures). Stripping them here keeps host's entire dependency subtree on
+    one canonical property set regardless of how host itself was reached.
+  -->
+  <ItemDefinitionGroup>
+    <ProjectReference>
+      <GlobalPropertiesToRemove>AvaloniaRustPresentationProjects;AvaloniaRustViewRegistryFile</GlobalPropertiesToRemove>
+    </ProjectReference>
+  </ItemDefinitionGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Avalonia.Host.Tests, PublicKey=$(AvaloniaPublicKey)" />
     <MicroComIdl Include="Ownership\microcom-ownership.idl" />
-    <ProjectReference Include="..\avalonia-src\src\Skia\Avalonia.Skia\Avalonia.Skia.csproj" />
-    <ProjectReference Include="..\avalonia-src\src\HarfBuzz\Avalonia.HarfBuzz\Avalonia.HarfBuzz.csproj" />
-    <ProjectReference Include="..\avalonia-src\src\Avalonia.Themes.Fluent\Avalonia.Themes.Fluent.csproj" />
+    <ProjectReference Include="$(AvaloniaProducerRoot)\src\Skia\Avalonia.Skia\Avalonia.Skia.csproj" />
+    <ProjectReference Include="$(AvaloniaProducerRoot)\src\HarfBuzz\Avalonia.HarfBuzz\Avalonia.HarfBuzz.csproj" />
+    <ProjectReference Include="$(AvaloniaProducerRoot)\src\Avalonia.Themes.Fluent\Avalonia.Themes.Fluent.csproj" />
     <ProjectReference Include="..\interop\Avalonia.Rust\Avalonia.Rust.csproj" />
     <ProjectReference Include="..\interop\Avalonia.Rust.Interop\Avalonia.Rust.Interop.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(AvaloniaRustPresentationProjects)' != ''">
     <AvaloniaRustPresentationProject Include="$(AvaloniaRustPresentationProjects)" />
     <ProjectReference Include="@(AvaloniaRustPresentationProject)" />
   </ItemGroup>
   <ItemGroup Condition="'$(AvaloniaRustViewRegistryFile)' != ''">
-    <Compile Remove="Generated\ViewModels\RustViewRegistry.g.cs" />
+    <Compile Remove="ViewRegistry.cs" />
     <Compile Include="$(AvaloniaRustViewRegistryFile)" Link="Generated\ViewModels\RustViewRegistry.g.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(AvaloniaRustHostPlatform)' == 'Win32'">
-    <ProjectReference Include="..\avalonia-src\src\Windows\Avalonia.Win32\Avalonia.Win32.csproj" />
+    <ProjectReference Include="$(AvaloniaProducerRoot)\src\Windows\Avalonia.Win32\Avalonia.Win32.csproj" />
   </ItemGroup>
   <ItemGroup Condition="'$(AvaloniaRustHostPlatform)' == 'X11'">
-    <ProjectReference Include="..\avalonia-src\src\Avalonia.X11\Avalonia.X11.csproj" />
+    <ProjectReference Include="$(AvaloniaProducerRoot)\src\Avalonia.X11\Avalonia.X11.csproj" />
     <LinkerArg Include="-Wl,-rpath,'$ORIGIN'" />
   </ItemGroup>
   <ItemGroup Condition="'$(AvaloniaRustHostPlatform)' == 'OSX'">
-    <ProjectReference Include="..\avalonia-src\src\Avalonia.Native\Avalonia.Native.csproj" />
+    <ProjectReference Include="$(AvaloniaProducerRoot)\src\Avalonia.Native\Avalonia.Native.csproj" />
     <LinkerArg Include="-Wl,-rpath,@loader_path" />
   </ItemGroup>
   <Import Project="..\build\NullableEnable.props" />
