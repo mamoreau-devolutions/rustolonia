@@ -90,7 +90,7 @@ function Test-NativeConsumer {
     Write-Host "Native consumer smoke passed for $rid."
 }
 
-$scratch = Join-Path ([IO.Path]::GetTempPath()) ('rustolonia-test-build-app-' + [guid]::NewGuid().ToString('N'))
+$scratch = Join-Path $root 'rust' 'target' ('test-build-app-' + [guid]::NewGuid().ToString('N'))
 try {
     New-Item -ItemType Directory -Path $scratch | Out-Null
     $productionScripts = Get-ChildItem -LiteralPath (Join-Path $root 'rust'), (Join-Path $root 'avalonia-patches') -Filter '*.ps1' -File
