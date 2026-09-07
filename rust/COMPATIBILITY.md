@@ -5,6 +5,16 @@ workspace are released in semver lockstep from one source revision. The crates
 are `publish = false`; consumers must not mix a host or generated bindings from
 one release with crates from another release.
 
+[`rust/release-manifest.json`](release-manifest.json) is the single
+machine-readable record tying that lockstep release together: the Rustolonia
+version, the exact pinned producer commit, the additive producer patch set
+(by file and content hash), and every independently-versioned schema this
+repository publishes (`projection.ir.json`, the view-model IR, the released
+ABI baseline, and the external consumer manifest). A test
+(`ReleaseManifestTests`) fails closed if the manifest drifts from any of
+those actual sources of truth, so bumping one schema or patch without
+updating the manifest is caught rather than silently accepted.
+
 ## Generated IR
 
 `projection.ir.json` (framework object model) and
