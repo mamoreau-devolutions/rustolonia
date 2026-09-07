@@ -31,9 +31,7 @@
            Text="AvaloniaRustHostPlatform must be Win32, X11, or OSX for runtime identifier '$(RuntimeIdentifier)'." />
   </Target>
   <Target Name="ValidateAvaloniaRustConsumerInputs" BeforeTargets="PrepareForBuild">
-    <Error Condition="'@(AvaloniaRustPresentationProject)' == ''"
-           Text="AvaloniaRustPresentationProjects must contain at least one managed presentation project." />
-    <Error Condition="!Exists('%(AvaloniaRustPresentationProject.Identity)')"
+    <Error Condition="'@(AvaloniaRustPresentationProject)' != '' and !Exists('%(AvaloniaRustPresentationProject.Identity)')"
            Text="AvaloniaRustPresentationProjects contains a project that does not exist: '%(AvaloniaRustPresentationProject.Identity)'." />
     <Error Condition="'$(AvaloniaRustViewRegistryFile)' != '' and !Exists('$(AvaloniaRustViewRegistryFile)')"
            Text="AvaloniaRustViewRegistryFile does not exist: '$(AvaloniaRustViewRegistryFile)'." />
