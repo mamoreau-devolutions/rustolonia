@@ -154,7 +154,12 @@ function Invoke-ConsumerPackage {
             (Join-Path $bundle (Split-Path -Leaf $hostFile))
         )
         Invoke-ArtifactSigning -ArtifactDirectory $bundle -SignCommand $env:AVALONIA_RUST_SIGN_COMMAND -ExplicitFiles $signTargets
-        & (Join-Path $PSScriptRoot 'generate-sbom.ps1') -Rid $rid -Bundle $bundle
+        $consumerProducerPin = git -C $ProducerRootPath rev-parse HEAD 2>$null
+        $consumerHostAssets = Join-Path $rustoloniaRootPath 'host' 'obj' 'project.assets.json'
+        & (Join-Path $PSScriptRoot 'generate-sbom.ps1') -Rid $rid -Bundle $bundle `
+            -CargoLockPath (Split-Path -Parent $paths.cargoManifest | Join-Path -ChildPath 'Cargo.lock') `
+            -ProjectAssetsJsonPath $consumerHostAssets `
+            -ProducerPin $consumerProducerPin
         Write-Checksums -Bundle $bundle
     }
     finally {

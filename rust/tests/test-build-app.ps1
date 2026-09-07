@@ -238,6 +238,30 @@ Add-Content -LiteralPath (Join-Path $PSScriptRoot 'signatures.log') -Value $Arti
     Write-Checksums -Bundle $inventory
     Assert-True (@(Get-Content -LiteralPath (Join-Path $inventory 'checksums.sha256') | Where-Object { $_.EndsWith('*.hidden-metadata') }).Count -eq 1) 'Checksums must include hidden metadata on every OS.'
 
+    $depsInventory = Join-Path $scratch 'deps-inventory'
+    New-Item -ItemType Directory -Path $depsInventory | Out-Null
+    [IO.File]::WriteAllBytes((Join-Path $depsInventory 'a.bin'), [byte[]](0x61))
+    $fakeAssets = Join-Path $scratch 'project.assets.json'
+    Set-Content -LiteralPath $fakeAssets -Value '{"libraries":{"Some.Package/1.2.3":{"type":"package"},"local-project/1.0.0":{"type":"project"}}}'
+    $fakeCargoLock = Join-Path $scratch 'Cargo.lock'
+    Set-Content -LiteralPath $fakeCargoLock -Value @'
+[[package]]
+name = "third-party-crate"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "avalonia"
+version = "0.1.0"
+'@
+    & (Join-Path $root 'rust' 'generate-sbom.ps1') -Rid win-x64 -Bundle $depsInventory -CargoLockPath $fakeCargoLock -ProjectAssetsJsonPath $fakeAssets -ProducerPin 'deadbeef'
+    $depsSbom = Get-Content -LiteralPath (Join-Path $depsInventory 'sbom.cdx.json') -Raw | ConvertFrom-Json
+    Assert-True (@($depsSbom.components | Where-Object { $_.type -eq 'library' -and $_.purl -eq 'pkg:nuget/Some.Package@1.2.3' }).Count -eq 1) 'SBOM must include resolved NuGet package dependencies.'
+    Assert-True (@($depsSbom.components | Where-Object { $_.type -eq 'library' -and $_.name -eq 'local-project' }).Count -eq 0) 'SBOM must not list local project references as third-party dependencies.'
+    Assert-True (@($depsSbom.components | Where-Object { $_.type -eq 'library' -and $_.purl -eq 'pkg:cargo/third-party-crate@0.4.1' }).Count -eq 1) 'SBOM must include resolved Cargo dependencies.'
+    Assert-True (@($depsSbom.components | Where-Object { $_.type -eq 'library' -and $_.name -eq 'avalonia' -and $_.version -eq '0.1.0' }).Count -eq 0) 'SBOM must not list workspace-local crates without a [source] as third-party dependencies.'
+    Assert-True (@($depsSbom.metadata.properties | Where-Object { $_.name -eq 'avalonia:producer-pin' -and $_.value -eq 'deadbeef' }).Count -eq 1) 'SBOM must record the producer pin used to build the bundle.'
+
     if ($RunNativeSmoke) { Test-NativeConsumer -Scratch $scratch }
 }
 finally {

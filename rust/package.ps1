@@ -89,7 +89,12 @@ if (-not $SkipCargoBuild -and -not $env:AVN_PACKAGE_SKIP_CARGO_BUILD) {
 
 Invoke-ArtifactSigning -ArtifactDirectory $destination -SignCommand $env:AVALONIA_RUST_SIGN_COMMAND -ExplicitFiles $signTargets
 Write-Host '==> Writing deterministic CycloneDX delivery SBOM'
-& (Join-Path $PSScriptRoot 'generate-sbom.ps1') -Rid $Rid -Bundle $destination
+$producerPin = git -C $resolvedProducerRoot rev-parse HEAD 2>$null
+$hostAssets = Join-Path $resolvedRustoloniaRoot 'host' 'obj' 'project.assets.json'
+& (Join-Path $PSScriptRoot 'generate-sbom.ps1') -Rid $Rid -Bundle $destination `
+    -CargoLockPath (Join-Path $resolvedRustoloniaRoot 'rust' 'Cargo.lock') `
+    -ProjectAssetsJsonPath $hostAssets `
+    -ProducerPin $producerPin
 Write-Checksums -Bundle $destination
 
 Write-Host "Package layout ready at $destination"

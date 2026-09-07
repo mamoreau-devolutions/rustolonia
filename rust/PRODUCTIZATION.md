@@ -228,7 +228,18 @@ Both produce, for every supported RID:
   generated after optional signing and before checksums. It records SHA-256
   hashes for the host, Rust executable, bundled native libraries, and licence;
   it intentionally excludes itself and the checksum manifest to avoid a
-  recursive hash.
+  recursive hash. It also records the resolved third-party dependency graph:
+  NuGet packages from the host's already-restored `project.assets.json` (no
+  network access; `type: "project"` entries such as in-repo project
+  references are excluded) and Cargo crates from `Cargo.lock` (workspace-local
+  crates with no `[source]`, like `avalonia`, are excluded as not third-party).
+  Each resolved dependency is a CycloneDX `library` component with a `purl`
+  (`pkg:nuget/...`/`pkg:cargo/...`). `metadata.properties` records the producer
+  git pin used for the build and, when a dependency source path could not be
+  supplied, an explicit note that dependency data for that ecosystem is
+  unavailable rather than silently omitting it. This is still a delivery
+  inventory of resolved packages and their identities, not a NVD/OSV
+  vulnerability scan or license-compatibility check.
 
 The layout is deterministic: the same RID with the same configuration and
 example always produces the same file set at the same relative paths, which
