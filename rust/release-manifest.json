@@ -6,7 +6,7 @@
   "patches": [
     {
       "path": "avalonia-patches/avalonia-controls.patch",
-      "sha256": "c1aef0ebc87b68f97de7d080d8035683e7999b5541c931171e84e9c8b439df66"
+      "sha256": "a1f051d24183c68745d7354ad1d5403fb58924533e79001c5234611d2a149839"
     }
   ],
   "schemas": {
