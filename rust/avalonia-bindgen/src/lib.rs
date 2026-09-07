@@ -3,11 +3,13 @@ mod emit_safe;
 mod error;
 mod geometry;
 mod ir;
+mod owned;
 mod validate;
 mod variant;
 
 pub use error::GenerationError;
 pub use ir::ProjectionIr;
+pub use owned::{check_outputs, write_outputs, BINDGEN_GENERATOR_ID};
 
 pub fn generate_from_ir(ir: &ProjectionIr) -> Result<String, GenerationError> {
     ir.validate()?;
