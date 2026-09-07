@@ -189,6 +189,214 @@ public class ProjectionIrValidationTests
         }.Validate();
     }
 
+    [Fact]
+    public void Empty_base_full_name_is_rejected_by_from_json()
+    {
+        const string json = """{"version":1,"types":[{"name":"IAvnA","fullName":"Tests.IAvnA","kind":"Interface","baseFullName":""}]}""";
+        var error = Assert.Throws<InvalidOperationException>(() => ProjectionIr.FromJson(json));
+        Assert.Contains("Type 'Tests.IAvnA' has an empty baseFullName.", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Collection_i32_element_kind_is_rejected_by_from_json()
+    {
+        const string json = """
+            {
+              "version": 1,
+              "types": [
+                {
+                  "name": "IAvnA",
+                  "fullName": "Tests.IAvnA",
+                  "kind": "Interface",
+                  "properties": [
+                    {
+                      "name": "Items",
+                      "kind": "ComCollection",
+                      "interfaceName": "Tests.IAvnList",
+                      "interfaceIid": "00000000-0000-0000-0000-000000000001",
+                      "elementKind": "I32"
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+        var error = Assert.Throws<InvalidOperationException>(() => ProjectionIr.FromJson(json));
+        Assert.Contains("Unsupported collection element kind 'I32'", error.Message, StringComparison.Ordinal);
+        Assert.Contains("type 'Tests.IAvnA' property 'Items'", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Collection_missing_interface_name_is_rejected_by_from_json()
+    {
+        const string json = """
+            {
+              "version": 1,
+              "types": [
+                {
+                  "name": "IAvnA",
+                  "fullName": "Tests.IAvnA",
+                  "kind": "Interface",
+                  "properties": [
+                    { "name": "Items", "kind": "ComCollection", "elementKind": "Variant" }
+                  ]
+                }
+              ]
+            }
+            """;
+        var error = Assert.Throws<InvalidOperationException>(() => ProjectionIr.FromJson(json));
+        Assert.Contains("Missing interfaceName at type 'Tests.IAvnA' property 'Items'.", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Collection_missing_element_kind_is_rejected_by_from_json()
+    {
+        const string json = """
+            {
+              "version": 1,
+              "types": [
+                {
+                  "name": "IAvnA",
+                  "fullName": "Tests.IAvnA",
+                  "kind": "Interface",
+                  "properties": [
+                    {
+                      "name": "Items",
+                      "kind": "ComCollection",
+                      "interfaceName": "Tests.IAvnList",
+                      "interfaceIid": "00000000-0000-0000-0000-000000000001"
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+        var error = Assert.Throws<InvalidOperationException>(() => ProjectionIr.FromJson(json));
+        Assert.Contains("Missing elementKind at type 'Tests.IAvnA' property 'Items'.", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Collection_com_interface_missing_element_interface_is_rejected_by_from_json()
+    {
+        const string json = """
+            {
+              "version": 1,
+              "types": [
+                {
+                  "name": "IAvnA",
+                  "fullName": "Tests.IAvnA",
+                  "kind": "Interface",
+                  "properties": [
+                    {
+                      "name": "Items",
+                      "kind": "ComCollection",
+                      "interfaceName": "Tests.IAvnList",
+                      "interfaceIid": "00000000-0000-0000-0000-000000000001",
+                      "elementKind": "ComInterface"
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+        var error = Assert.Throws<InvalidOperationException>(() => ProjectionIr.FromJson(json));
+        Assert.Contains("Missing elementInterfaceName at type 'Tests.IAvnA' property 'Items'.", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Fields_payload_without_parameters_is_rejected_by_from_json()
+    {
+        const string json = """
+            {
+              "version": 1,
+              "types": [
+                {
+                  "name": "IAvnA",
+                  "fullName": "Tests.IAvnA",
+                  "kind": "Interface",
+                  "events": [
+                    {
+                      "name": "Changed",
+                      "handlerInterfaceName": "Tests.IAvnChangedHandler",
+                      "handlerInterfaceIid": "00000000-0000-0000-0000-000000000002",
+                      "payloadKind": "Fields",
+                      "parameters": []
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+        var error = Assert.Throws<InvalidOperationException>(() => ProjectionIr.FromJson(json));
+        Assert.Contains("Fields payload requires parameters at type 'Tests.IAvnA' event 'Changed'.", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Args_payload_without_interface_name_is_rejected_by_from_json()
+    {
+        const string json = """
+            {
+              "version": 1,
+              "types": [
+                {
+                  "name": "IAvnA",
+                  "fullName": "Tests.IAvnA",
+                  "kind": "Interface",
+                  "events": [
+                    {
+                      "name": "Changed",
+                      "handlerInterfaceName": "Tests.IAvnChangedHandler",
+                      "handlerInterfaceIid": "00000000-0000-0000-0000-000000000002",
+                      "payloadKind": "Args"
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+        var error = Assert.Throws<InvalidOperationException>(() => ProjectionIr.FromJson(json));
+        Assert.Contains("Missing argsInterfaceName at type 'Tests.IAvnA' event 'Changed'.", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Null_types_collection_is_rejected_by_from_json()
+    {
+        const string json = """{"version":1,"types":null}""";
+        var error = Assert.Throws<InvalidOperationException>(() => ProjectionIr.FromJson(json));
+        Assert.Contains("Projection IR 'types' must not be null.", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Null_types_element_is_rejected_by_from_json()
+    {
+        const string json = """{"version":1,"types":[null]}""";
+        var error = Assert.Throws<InvalidOperationException>(() => ProjectionIr.FromJson(json));
+        Assert.Contains("Projection IR 'types[0]' must not be null.", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Null_methods_collection_is_rejected_by_from_json()
+    {
+        const string json = """
+            {
+              "version": 1,
+              "types": [
+                { "name": "IAvnA", "fullName": "Tests.IAvnA", "kind": "Interface", "methods": null }
+              ]
+            }
+            """;
+        var error = Assert.Throws<InvalidOperationException>(() => ProjectionIr.FromJson(json));
+        Assert.Contains("Projection IR 'types[0].methods' must not be null.", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Null_attached_properties_collection_is_rejected_by_from_json()
+    {
+        const string json = """{"version":1,"types":[],"attachedProperties":null}""";
+        var error = Assert.Throws<InvalidOperationException>(() => ProjectionIr.FromJson(json));
+        Assert.Contains("Projection IR 'attachedProperties' must not be null.", error.Message, StringComparison.Ordinal);
+    }
+
     private static ProjectedType Interface(
         string name,
         string? baseFullName = null,

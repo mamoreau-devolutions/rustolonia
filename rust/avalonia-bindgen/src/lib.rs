@@ -6,21 +6,27 @@ mod ir;
 mod validate;
 mod variant;
 
-pub use emit::emit_sys_module;
-pub use emit_safe::emit_safe_module;
 pub use error::GenerationError;
 pub use ir::ProjectionIr;
 
+pub fn generate_from_ir(ir: &ProjectionIr) -> Result<String, GenerationError> {
+    ir.validate()?;
+    Ok(emit::emit_sys_module(ir))
+}
+
+pub fn generate_safe_from_ir(ir: &ProjectionIr) -> Result<String, GenerationError> {
+    ir.validate()?;
+    Ok(emit_safe::emit_safe_module(ir))
+}
+
 pub fn generate_from_json(json: &str) -> Result<String, GenerationError> {
     let ir: ProjectionIr = serde_json::from_str(json)?;
-    ir.validate()?;
-    Ok(emit_sys_module(&ir))
+    generate_from_ir(&ir)
 }
 
 pub fn generate_safe_from_json(json: &str) -> Result<String, GenerationError> {
     let ir: ProjectionIr = serde_json::from_str(json)?;
-    ir.validate()?;
-    Ok(emit_safe_module(&ir))
+    generate_safe_from_ir(&ir)
 }
 
 #[cfg(test)]
@@ -98,7 +104,7 @@ mod tests {
     fn factory_slots_are_sorted_by_interface_name() {
         let ir: ProjectionIr =
             serde_json::from_str(include_str!("../../projection.ir.json")).unwrap();
-        let generated = emit_sys_module(&ir);
+        let generated = generate_from_ir(&ir).unwrap();
         let mut slots: Vec<_> = ir
             .types
             .iter()
@@ -365,6 +371,241 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(error.contains("Unsupported projection IR version 99"));
+    }
+
+    #[test]
+    fn generate_from_ir_rejects_future_version() {
+        let ir: ProjectionIr = serde_json::from_str(r#"{ "version": 17, "types": [] }"#).unwrap();
+        let error = generate_from_ir(&ir).unwrap_err().to_string();
+        assert!(error.contains("Unsupported projection IR version 17"));
+    }
+
+    #[test]
+    fn generate_safe_from_ir_rejects_inheritance_cycle() {
+        let ir: ProjectionIr = serde_json::from_str(
+            r#"
+            {
+              "version": 1,
+              "types": [
+                {
+                  "name": "IAvnA",
+                  "fullName": "Tests.IAvnA",
+                  "kind": "Interface",
+                  "baseFullName": "Tests.IAvnB"
+                },
+                {
+                  "name": "IAvnB",
+                  "fullName": "Tests.IAvnB",
+                  "kind": "Interface",
+                  "baseFullName": "Tests.IAvnA"
+                }
+              ]
+            }
+            "#,
+        )
+        .unwrap();
+        let error = generate_safe_from_ir(&ir).unwrap_err().to_string();
+        assert!(error.contains("Inheritance cycle: Tests.IAvnA -> Tests.IAvnB -> Tests.IAvnA"));
+    }
+
+    #[test]
+    fn empty_base_full_name_is_rejected_by_public_entrypoint() {
+        let error = generate_from_json(
+            r#"{"version":1,"types":[{"name":"IAvnA","fullName":"Tests.IAvnA","kind":"Interface","baseFullName":""}]}"#,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("Type 'Tests.IAvnA' has an empty baseFullName."));
+    }
+
+    #[test]
+    fn whitespace_base_full_name_is_rejected_by_public_entrypoint() {
+        let error = generate_from_json(
+            r#"{"version":1,"types":[{"name":"IAvnA","fullName":"Tests.IAvnA","kind":"Interface","baseFullName":"   "}]}"#,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("Type 'Tests.IAvnA' has an empty baseFullName."));
+    }
+
+    #[test]
+    fn collection_i32_element_kind_is_rejected_before_emission() {
+        let error = generate_from_json(
+            r#"
+            {
+              "version": 1,
+              "types": [
+                {
+                  "name": "IAvnA",
+                  "fullName": "Tests.IAvnA",
+                  "kind": "Interface",
+                  "properties": [
+                    {
+                      "name": "Items",
+                      "kind": "ComCollection",
+                      "interfaceName": "Tests.IAvnList",
+                      "interfaceIid": "00000000-0000-0000-0000-000000000001",
+                      "elementKind": "I32"
+                    }
+                  ]
+                }
+              ]
+            }
+            "#,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("Unsupported collection element kind 'I32'"));
+        assert!(error.contains("type 'Tests.IAvnA' property 'Items'"));
+    }
+
+    #[test]
+    fn collection_missing_interface_name_is_rejected_before_emission() {
+        let error = generate_from_json(
+            r#"
+            {
+              "version": 1,
+              "types": [
+                {
+                  "name": "IAvnA",
+                  "fullName": "Tests.IAvnA",
+                  "kind": "Interface",
+                  "properties": [
+                    {
+                      "name": "Items",
+                      "kind": "ComCollection",
+                      "elementKind": "Variant"
+                    }
+                  ]
+                }
+              ]
+            }
+            "#,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("Missing interfaceName at type 'Tests.IAvnA' property 'Items'."));
+    }
+
+    #[test]
+    fn collection_missing_element_kind_is_rejected_before_emission() {
+        let error = generate_from_json(
+            r#"
+            {
+              "version": 1,
+              "types": [
+                {
+                  "name": "IAvnA",
+                  "fullName": "Tests.IAvnA",
+                  "kind": "Interface",
+                  "properties": [
+                    {
+                      "name": "Items",
+                      "kind": "ComCollection",
+                      "interfaceName": "Tests.IAvnList",
+                      "interfaceIid": "00000000-0000-0000-0000-000000000001"
+                    }
+                  ]
+                }
+              ]
+            }
+            "#,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("Missing elementKind at type 'Tests.IAvnA' property 'Items'."));
+    }
+
+    #[test]
+    fn collection_com_interface_missing_element_interface_is_rejected() {
+        let error = generate_from_json(
+            r#"
+            {
+              "version": 1,
+              "types": [
+                {
+                  "name": "IAvnA",
+                  "fullName": "Tests.IAvnA",
+                  "kind": "Interface",
+                  "properties": [
+                    {
+                      "name": "Items",
+                      "kind": "ComCollection",
+                      "interfaceName": "Tests.IAvnList",
+                      "interfaceIid": "00000000-0000-0000-0000-000000000001",
+                      "elementKind": "ComInterface"
+                    }
+                  ]
+                }
+              ]
+            }
+            "#,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(
+            error.contains("Missing elementInterfaceName at type 'Tests.IAvnA' property 'Items'.")
+        );
+    }
+
+    #[test]
+    fn fields_payload_without_parameters_is_rejected_before_emission() {
+        let error = generate_from_json(
+            r#"
+            {
+              "version": 1,
+              "types": [
+                {
+                  "name": "IAvnA",
+                  "fullName": "Tests.IAvnA",
+                  "kind": "Interface",
+                  "events": [
+                    {
+                      "name": "Changed",
+                      "handlerInterfaceName": "Tests.IAvnChangedHandler",
+                      "handlerInterfaceIid": "00000000-0000-0000-0000-000000000002",
+                      "payloadKind": "Fields",
+                      "parameters": []
+                    }
+                  ]
+                }
+              ]
+            }
+            "#,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error
+            .contains("Fields payload requires parameters at type 'Tests.IAvnA' event 'Changed'."));
+    }
+
+    #[test]
+    fn args_payload_without_interface_name_is_rejected_before_emission() {
+        let error = generate_from_json(
+            r#"
+            {
+              "version": 1,
+              "types": [
+                {
+                  "name": "IAvnA",
+                  "fullName": "Tests.IAvnA",
+                  "kind": "Interface",
+                  "events": [
+                    {
+                      "name": "Changed",
+                      "handlerInterfaceName": "Tests.IAvnChangedHandler",
+                      "handlerInterfaceIid": "00000000-0000-0000-0000-000000000002",
+                      "payloadKind": "Args"
+                    }
+                  ]
+                }
+              ]
+            }
+            "#,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("Missing argsInterfaceName at type 'Tests.IAvnA' event 'Changed'."));
     }
 
     fn to_snake(value: &str) -> String {

@@ -46,6 +46,8 @@ const SUPPORTED_MARSHALLING_KINDS: &[&str] = &[
 const SUPPORTED_DIRECTIONS: &[&str] = &["In", "Out", "InOut"];
 const SUPPORTED_TYPE_KINDS: &[&str] = &["Interface", "Class", "Struct", "Enum"];
 const SUPPORTED_PAYLOAD_KINDS: &[&str] = &["None", "Fields", "Args"];
+const SUPPORTED_COLLECTION_ELEMENT_KINDS: &[&str] =
+    &["ComInterface", "StringUtf16", "Variant", "DateTimeI64"];
 
 pub fn validate(ir: &ProjectionIr) -> Result<(), GenerationError> {
     if ir.version < MINIMUM_VERSION || ir.version > CURRENT_VERSION {
@@ -83,11 +85,7 @@ pub fn validate(ir: &ProjectionIr) -> Result<(), GenerationError> {
             validate_method(ty, method)?;
         }
         for property in &ty.properties {
-            let location = format!("type '{}' property '{}'", ty.full_name, property.name);
-            validate_kind(&property.kind, &location)?;
-            if let Some(element_kind) = &property.element_kind {
-                validate_kind(element_kind, &format!("{location} element"))?;
-            }
+            validate_property(ty, property)?;
         }
         for event in &ty.events {
             validate_event(ty, event)?;
@@ -114,6 +112,49 @@ fn validate_method(ty: &ProjectedType, method: &ProjectedMethod) -> Result<(), G
     Ok(())
 }
 
+fn validate_property(
+    ty: &ProjectedType,
+    property: &crate::ir::ProjectedProperty,
+) -> Result<(), GenerationError> {
+    let location = format!("type '{}' property '{}'", ty.full_name, property.name);
+    validate_kind(&property.kind, &location)?;
+    if property.kind != "ComCollection" {
+        if let Some(element_kind) = &property.element_kind {
+            validate_kind(element_kind, &format!("{location} element"))?;
+        }
+        return Ok(());
+    }
+
+    require_present(
+        property.interface_name.as_deref(),
+        "interfaceName",
+        &location,
+    )?;
+    require_present(property.interface_iid.as_deref(), "interfaceIid", &location)?;
+    let Some(element_kind) = property
+        .element_kind
+        .as_deref()
+        .filter(|kind| !kind.trim().is_empty())
+    else {
+        return Err(GenerationError::invalid(format!(
+            "Missing elementKind at {location}."
+        )));
+    };
+    if !SUPPORTED_COLLECTION_ELEMENT_KINDS.contains(&element_kind) {
+        return Err(GenerationError::invalid(format!(
+            "Unsupported collection element kind '{element_kind}' at {location}."
+        )));
+    }
+    if element_kind == "ComInterface" {
+        require_present(
+            property.element_interface_name.as_deref(),
+            "elementInterfaceName",
+            &location,
+        )?;
+    }
+    Ok(())
+}
+
 fn validate_event(ty: &ProjectedType, event: &ProjectedEvent) -> Result<(), GenerationError> {
     let location = format!("type '{}' event '{}'", ty.full_name, event.name);
     validate_named(
@@ -126,6 +167,31 @@ fn validate_event(ty: &ProjectedType, event: &ProjectedEvent) -> Result<(), Gene
     )?;
     for parameter in &event.parameters {
         validate_parameter(parameter, &location)?;
+    }
+    match event.payload_kind.as_str() {
+        "None" if !event.parameters.is_empty() => {
+            return Err(GenerationError::invalid(format!(
+                "None payload cannot have parameters at {location}."
+            )));
+        }
+        "Fields" if event.parameters.is_empty() => {
+            return Err(GenerationError::invalid(format!(
+                "Fields payload requires parameters at {location}."
+            )));
+        }
+        "Args" => {
+            require_present(
+                event.args_interface_name.as_deref(),
+                "argsInterfaceName",
+                &location,
+            )?;
+            require_present(
+                event.args_interface_iid.as_deref(),
+                "argsInterfaceIid",
+                &location,
+            )?;
+        }
+        _ => {}
     }
     Ok(())
 }
@@ -172,15 +238,40 @@ fn validate_named(value: &str, allowed: &[&str], message: &str) -> Result<(), Ge
     }
 }
 
+fn require_present(
+    value: Option<&str>,
+    field: &str,
+    location: &str,
+) -> Result<(), GenerationError> {
+    if value
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .is_some()
+    {
+        Ok(())
+    } else {
+        Err(GenerationError::invalid(format!(
+            "Missing {field} at {location}."
+        )))
+    }
+}
+
 fn validate_inheritance(
     ty: &ProjectedType,
     types_by_full_name: &std::collections::HashMap<&str, &ProjectedType>,
 ) -> Result<(), GenerationError> {
-    let Some(base) = ty.base_full_name.as_deref().filter(|name| !name.is_empty()) else {
-        return Ok(());
-    };
+    match ty.base_full_name.as_deref() {
+        None => return Ok(()),
+        Some(base) if base.trim().is_empty() => {
+            return Err(GenerationError::invalid(format!(
+                "Type '{}' has an empty baseFullName.",
+                ty.full_name
+            )));
+        }
+        Some(_) => {}
+    }
 
-    if base == ty.full_name {
+    if ty.base_full_name.as_deref() == Some(ty.full_name.as_str()) {
         return Err(GenerationError::invalid(format!(
             "Type '{}' has a self base reference.",
             ty.full_name
@@ -189,11 +280,13 @@ fn validate_inheritance(
 
     let mut seen = vec![ty.full_name.as_str()];
     let mut current = ty;
-    while let Some(base_name) = current
-        .base_full_name
-        .as_deref()
-        .filter(|name| !name.is_empty())
-    {
+    while let Some(base_name) = current.base_full_name.as_deref() {
+        if base_name.trim().is_empty() {
+            return Err(GenerationError::invalid(format!(
+                "Type '{}' has an empty baseFullName.",
+                current.full_name
+            )));
+        }
         let Some(base_type) = types_by_full_name.get(base_name) else {
             return Err(GenerationError::invalid(format!(
                 "Type '{}' references missing base '{base_name}'.",
