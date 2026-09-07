@@ -63,12 +63,12 @@ configuration, and output directory; `binary` optionally selects a normal
 Cargo binary and defaults to `packageName`.
 
 ```powershell
-& .\producer\rust\build-app.ps1 -ProducerRoot .\producer `
+& .\rustolonia\rust\build-app.ps1 -ProducerRoot .\rustolonia\avalonia-src `
   -Manifest .\consumer\avalonia-app.json
 ```
 
 The cross-platform `build-app.ps1` (PowerShell 7) validates the
-manifest and paths before it runs the producer's
+manifest and paths before it runs Rustolonia's
 `Avalonia.ViewModelProjection.Tool` against consumer outputs. It then runs
 `cargo fmt`, builds consumer AXAML, builds the declared Cargo `--bin`, and
 publishes `Avalonia.Host` with
@@ -80,10 +80,19 @@ re-export `DynamicViewModel`, `ViewModelSink`, `ViewModelBatch`, and
 `BatchCompletion` from `avalonia::view_model`; the shipped template already
 does so.
 Finally it writes the host, published native DLLs/shared libraries, consumer
-executable, `licence.md`, deterministic CycloneDX delivery SBOM, and SHA-256
+executable, the producer's `licence.md`, Rustolonia's `LICENSE` and
+`THIRD-PARTY-NOTICES.txt`, deterministic CycloneDX delivery inventory, and SHA-256
 checksums to the manifest's adjacent output directory. A local
 `AVALONIA_RUST_SIGN_COMMAND` wrapper may sign final binaries before SBOM and
 checksums; it is never downloaded or shell-expanded.
+
+Both packaging entrypoints share `package-shared.ps1`: target mappings, native
+preparation, command construction, native-library copying, signing and checksums.
+Consumer publication uses a unique temporary staging directory, and cleans only
+that invocation's directory. A `.rustolonia-bundle-owner` marker identifies
+disposable output bundles. A nonempty directory without the valid marker is
+rejected rather than erased; choose a new output directory for existing bundles
+created before this ownership mechanism.
 
 Windows MSVC Rust binaries are built with `target-feature=+crt-static`, so the
 adjacent bundle does not require a separately installed Visual C++ runtime.
@@ -209,7 +218,10 @@ Both produce, for every supported RID:
   finds it with no environment variable.
 - `checksums.sha256` -- a `sha256sum -c`-compatible SHA-256 manifest of every
   other file in the directory, generated last so it never hashes itself.
-- `licence.md` -- the repository licence copied into every delivery bundle.
+- `licence.md`, `LICENSE`, `THIRD-PARTY-NOTICES.txt` -- producer and project
+  licensing notices copied into every delivery bundle.
+- `.rustolonia-bundle-owner` -- the marker authorizing replacement of a previously
+  generated bundle; it is included in the delivery inventory and checksums.
 - `sbom.cdx.json` -- a deterministic CycloneDX 1.5 delivery inventory,
   generated after optional signing and before checksums. It records SHA-256
   hashes for the host, Rust executable, bundled native libraries, and licence;
@@ -233,9 +245,10 @@ an absent target with the corresponding `rustup target add` command:
 | `osx-x64` | `x86_64-apple-darwin` |
 | `osx-arm64` | `aarch64-apple-darwin` |
 
-Linux and macOS packaging require a matching native CPU because their release
-gate starts the packaged binary; this avoids treating a successfully
-cross-compiled but unexecutable binary as a tested release artifact.
+Packaging supports same-OS cross-architecture builds when the required native
+and Rust toolchains are available. Executing a packaged application requires a
+matching native runner. Cross-build artifacts are therefore not evidence of
+native runtime coverage.
 
 ### Signing hook
 
@@ -249,6 +262,10 @@ owns all signer options and identity selection. No shell evaluation or command
 template expansion is performed. If unset, signing is skipped with a message
 explaining how to opt in; either way, the SBOM and checksums describe final
 (optionally signed) bytes.
+
+The entrypoints explicitly identify the application executable, including
+extensionless Linux/macOS binaries. Licensing files and ownership markers are
+not signing inputs. Missing explicitly requested signing inputs fail the build.
 
 ## Source-only crate packaging
 
@@ -308,6 +325,14 @@ and the checks below are what keep that true instead of assumed:
 
 ## Tests
 
+- `pwsh ./rust/tests/test-build-app.ps1` runs quick script-parser, helper,
+  path/ownership, signing, manifest and scaffold regressions without a native
+  build. All fixtures are created in an owned temporary directory.
+- Add `-RunNativeSmoke` to build, package and launch a fresh external consumer
+  for the current OS/architecture. On Linux, run under a display such as
+  `xvfb-run -a pwsh ./rust/tests/test-build-app.ps1 -RunNativeSmoke`. Smoke builds
+  do not invoke a user-configured signing service and clear the host override
+  when launching so that the adjacent packaged host is exercised.
 - `rust/avalonia/src/runtime.rs` (`host_discovery_tests` module) and
   `rust/avalonia/tests/host_discovery.rs` cover `discover_host_path`: the
   explicit override always winning (even to a nonexistent path), the

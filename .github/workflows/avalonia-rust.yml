@@ -16,6 +16,19 @@ permissions:
   contents: read
 
 jobs:
+  quick-checks:
+    name: helper and scaffold checks
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run helper and scaffold regressions without native builds
+        shell: pwsh
+        run: ./rust/tests/test-build-app.ps1
+
   release-gate:
     name: ${{ matrix.rid }}
     runs-on: ${{ matrix.os }}
@@ -102,7 +115,7 @@ jobs:
             -project avalonia-src/native/Avalonia.Native/src/OSX/Avalonia.Native.OSX.xcodeproj/ \
             -configuration Release \
             ARCHS="${{ runner.arch == 'ARM64' && 'arm64' || 'x86_64' }}" \
-            "CONFIGURATION_BUILD_DIR=$GITHUB_WORKSPACE/Build/Products/Release"
+            "CONFIGURATION_BUILD_DIR=$GITHUB_WORKSPACE/avalonia-src/Build/Products/Release"
 
       - name: Run managed host and generator tests
         shell: pwsh
@@ -118,6 +131,16 @@ jobs:
           }
           pwsh ./rust/tests/test-build-app.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build and launch a fresh external consumer
+        if: runner.os != 'Linux'
+        shell: pwsh
+        run: ./rust/tests/test-build-app.ps1 -RunNativeSmoke
+
+      - name: Build and launch a fresh external consumer under Xvfb
+        if: runner.os == 'Linux'
+        shell: bash
+        run: xvfb-run -a pwsh -NoProfile -File ./rust/tests/test-build-app.ps1 -RunNativeSmoke
 
       - name: Publish NativeAOT host and run cargo workspace tests
         shell: pwsh

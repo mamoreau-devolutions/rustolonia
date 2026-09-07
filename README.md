@@ -10,7 +10,7 @@ pinned `avalonia-src` producer submodule at commit
 
 | Directory | Contents |
 |---|---|
-| `avalonia-src/` | Git submodule: AvaloniaUI/Avalonia pinned to `9654332a79f637473da96054f75b2a16deaa557e` |
+| `avalonia-src/` | Avalonia producer pinned to `9654332a79f637473da96054f75b2a16deaa557e`, currently cloned from the `mamoreau-devolutions/Avalonia` fork |
 | `avalonia-patches/` | Additive framework patches applied onto the pinned checkout (see its README + UPSTREAM.md) |
 | `rust/` | The Rust workspace: `avalonia` (safe bindings), `avalonia-sys` (ABI bindings), `avalonia-bindgen` (IR to Rust generator), templates, build scripts, and the checked-in IR |
 | `host/` | `Avalonia.Host` - the C# NativeAOT host that serves the ABI, plus its generated object model |
@@ -43,9 +43,23 @@ paths with spaces, and validates the declared roots before writing any files.
 
 ## CI
 
-`.github/workflows/avalonia-rust.yml` builds and tests the full matrix
-(win/linux/osx, x64/arm64): applies the producer patches after checkout, runs
-the managed suites, publishes the NativeAOT host, runs the cargo workspace
-tests, builds and packages the flagship samples, and smoke-tests the packaged
-artifacts. The workflow is explicit about native execution, cross-build legs,
-and the separate external scaffold regression test.
+`.github/workflows/avalonia-rust.yml` keeps the native release and cross-build
+gates running automatically on pull requests and pushes to `main`. Native
+execution covers Windows/Linux x64 and macOS x64/arm64; Windows/Linux arm64
+have cross-build packaging coverage, not native execution coverage. The
+original flagship samples remain part of the release gate.
+
+The quick helper/scaffold suite does not build or launch an application:
+
+```pwsh
+pwsh ./rust/tests/test-build-app.ps1
+```
+
+Native jobs additionally build and launch a fresh external consumer:
+
+```pwsh
+pwsh ./rust/tests/test-build-app.ps1 -RunNativeSmoke
+```
+
+Linux native smoke execution needs a display, for example
+`xvfb-run -a pwsh ./rust/tests/test-build-app.ps1 -RunNativeSmoke`.
