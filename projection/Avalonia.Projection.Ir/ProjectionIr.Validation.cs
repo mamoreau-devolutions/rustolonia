@@ -41,7 +41,11 @@ public sealed partial class ProjectionIr
                 {
                     var parameter = RequireElement(parameters, parameterIndex, $"types[{typeIndex}].methods[{methodIndex}].parameters");
                     ValidateParameter(parameter, methodLocation);
+                    if (parameter.Direction == ParameterDirection.InOut)
+                        throw new InvalidOperationException($"InOut method parameters are not supported at {methodLocation} parameter '{parameter.Name}'.");
                 }
+                if (method.ReturnKind != MarshallingKind.I32 || !method.PreserveSig)
+                    throw new InvalidOperationException($"Only PreserveSig I32 HRESULT returns are supported at {methodLocation}.");
             }
 
             var properties = RequireCollection(type.Properties, $"types[{typeIndex}].properties");

@@ -54,6 +54,9 @@ gates running automatically on pull requests and pushes to `main`. Native
 execution covers Windows/Linux x64 and macOS x64/arm64; Windows/Linux arm64
 have cross-build packaging coverage, not native execution coverage. The
 original flagship samples remain part of the release gate.
+Artifacts are named `avalonia-rust-native-<rid>` for native jobs and
+`avalonia-rust-cross-<rid>` for cross-build jobs, so their provenance remains
+unambiguous when both jobs target the same RID.
 
 The quick helper/scaffold suite does not build or launch an application:
 

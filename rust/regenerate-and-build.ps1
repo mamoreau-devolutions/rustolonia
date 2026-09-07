@@ -12,7 +12,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
-# rust/<script> -> the Avalonia repository root is three levels up
+# The Rustolonia repository root is the parent of rust/.
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 
 Write-Host '==> [1/4] Regenerating object-model projection IR, C# COM sources, and native ABI header'

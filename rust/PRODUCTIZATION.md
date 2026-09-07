@@ -19,7 +19,7 @@ requirements are defined in [COMPATIBILITY.md](COMPATIBILITY.md).
 [`templates/avalonia-app`](templates/avalonia-app) is a minimal, copyable
 Cargo project (a `Cargo.toml` with a path dependency on `avalonia`, plus a
 `src/main.rs` that opens a window) meant to be copied outside this repository
-to bootstrap a new application. `new-app.ps1` do the copy and
+to bootstrap a new application. `new-app.ps1` performs the copy and
 package rename:
 
 ```powershell
@@ -101,7 +101,7 @@ The external template carries the same target-specific Cargo configuration;
 
 ## One-command developer workflow
 
-`regenerate-and-build.ps1` replace the four
+`regenerate-and-build.ps1` replaces the four
 previously separate, manually copy-pasted commands from README.md's
 "Regenerate bindings" section with one:
 
@@ -137,22 +137,28 @@ the next one runs.
 Schema version 3 table metadata is generated with the normal consumer
 presentation sources. Consumers use built-in `TableView` columns and compiled
 AXAML cell bindings; no DataGrid package, runtime binding reflection, or
-application-specific host code is required. A stage-28 model snapshot still has
+application-specific host code is required. A snapshot-backed model still has
 one managed row adapter per delivered row, while `TableView` virtualizes visual
-rows. Stage 30's schema-v4 `window` metadata is the range-backed answer: the
+rows. Schema-v4 `window` metadata provides range-backed collections: the
 projection reports the whole Rust dataset size while keeping live element
 objects bounded by `pageSize * maxLivePages`, and both shapes ship in the
 sample so the difference is measurable rather than asserted.
 
-Useful switches/environment variables:
+Useful switches (the same PowerShell arguments work on Windows, Linux, and macOS):
 
-| PowerShell | Bash (env var) | Effect |
-| --- | --- | --- |
-| `-Configuration Debug` | `pwsh ./regenerate-and-build.ps1 Debug` | Build configuration for the .NET regeneration tools and managed build (default `Release`). |
-| `-SkipManagedBuild` | `AVN_SKIP_MANAGED_BUILD=1` | Skip step 4's `dotnet build`, e.g. when only the Rust side changed. |
-| `-Test` | `AVN_RUN_CARGO_TESTS=1` | Run `cargo test --workspace` instead of `cargo build --workspace`. Requires a host discoverable per [Host discovery](#host-discovery) below (`rust/build.ps1` publish one; set `AVN_HOST_NATIVE_LIB` otherwise). |
-| `-ValidateTemplate` | `AVN_VALIDATE_TEMPLATE=1` | Additionally `cargo check` the application template in place. |
-| `-PackageRid <rid>` | `AVN_PACKAGE_RID=<rid>` | Additionally run [`package.ps1`](#deterministic-per-rid-artifact-layout) for that RID. |
+| Switch | Effect |
+| --- | --- |
+| `-Configuration Debug` | Build configuration for the .NET regeneration tools and managed build (default `Release`). |
+| `-SkipManagedBuild` | Skip the code-first and sample-composed `dotnet build` calls; generation and the Rust workspace build still run. |
+| `-Test` | Run `cargo test --workspace` instead of `cargo build --workspace`. Requires a host discoverable per [Host discovery](#host-discovery) below (`rust/build.ps1` publishes one; set `AVN_HOST_NATIVE_LIB` otherwise). |
+| `-ValidateTemplate` | Scaffold a temporary external consumer, generate its view-model sources, run `cargo check`, and remove it on success. |
+| `-PackageRid <rid>` | Additionally run [`package.ps1`](#deterministic-per-rid-artifact-layout) for that RID. |
+
+For example, from the repository root:
+
+```bash
+pwsh ./rust/regenerate-and-build.ps1 -SkipManagedBuild -ValidateTemplate
+```
 
 This script intentionally does not replace `rust/build.ps1`
 (full RID publish plus `cargo test --workspace` against the exact published
@@ -237,7 +243,11 @@ Both produce, for every supported RID:
   (`pkg:nuget/...`/`pkg:cargo/...`). `metadata.properties` records the producer
   git pin used for the build and, when a dependency source path could not be
   supplied, an explicit note that dependency data for that ecosystem is
-  unavailable rather than silently omitting it. This is still a delivery
+  unavailable rather than silently omitting it. A supplied path that does not
+  exist is also recorded as unavailable. Both packaging entrypoints query
+  MSBuild's `ProjectAssetsFile` with the publish configuration, RID, and output
+  overrides rather than assuming `host/obj`; missing publish restore metadata
+  fails packaging. This is still a delivery
   inventory of resolved packages and their identities, not a NVD/OSV
   vulnerability scan or license-compatibility check.
 
@@ -335,10 +345,10 @@ process consumes, not as the whole of that process.
   explicit override always winning (even to a nonexistent path), the
   adjacent-file lookup succeeding and failing, and the combined error naming
   both mechanisms -- all without requiring a published host.
-- `regenerate-and-build.ps1 -ValidateTemplate` / `AVN_VALIDATE_TEMPLATE=1
-  pwsh ./regenerate-and-build.ps1` and direct `cargo check --manifest-path
-  rust/templates/avalonia-app/Cargo.toml` compile-check the application
-  template as a standalone crate.
+- `pwsh ./rust/regenerate-and-build.ps1 -ValidateTemplate` scaffolds a temporary
+  external consumer and generates its sources before compile-checking it as a
+  standalone crate. The checked-in template contains placeholders and should
+  not be compiled directly.
 - `cargo package --list` (see [Source-only crate packaging](#source-only-crate-packaging))
   is the packaging-readiness check for all three workspace crates.
 - `package.ps1` self-verify their own output shape (the

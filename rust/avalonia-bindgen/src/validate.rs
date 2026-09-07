@@ -108,6 +108,17 @@ fn validate_method(ty: &ProjectedType, method: &ProjectedMethod) -> Result<(), G
     validate_kind(&method.return_kind, &location)?;
     for parameter in &method.parameters {
         validate_parameter(parameter, &location)?;
+        if parameter.direction == "InOut" {
+            return Err(GenerationError::invalid(format!(
+                "InOut method parameters are not supported at {location} parameter '{}'.",
+                parameter.name
+            )));
+        }
+    }
+    if method.return_kind != "I32" || !method.preserve_sig {
+        return Err(GenerationError::invalid(format!(
+            "Only PreserveSig I32 HRESULT returns are supported at {location}."
+        )));
     }
     Ok(())
 }

@@ -50,16 +50,24 @@ unsafe impl ComInterface for IAvnClipboardData {
 
 impl ComPtr<IAvnClipboardData> {
     pub fn set_text(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
             let vtbl = (*self.as_raw()).vtbl.as_ref().unwrap();
-            hresult::check((vtbl.set_text)(self.as_raw(), optional_utf16(value)))
+            hresult::check((vtbl.set_text)(
+                self.as_raw(),
+                optional_utf16(value.as_deref()),
+            ))
         }
     }
 
     pub fn add_file_uri(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
             let vtbl = (*self.as_raw()).vtbl.as_ref().unwrap();
-            hresult::check((vtbl.add_file_uri)(self.as_raw(), optional_utf16(value)))
+            hresult::check((vtbl.add_file_uri)(
+                self.as_raw(),
+                optional_utf16(value.as_deref()),
+            ))
         }
     }
 }
@@ -247,5 +255,49 @@ mod tests {
         // Stage 31 never widens the stage 29 vtable; the two capabilities carry
         // distinct IIDs and are queried independently.
         assert_ne!(crate::storage::IAvnApplication3::IID, IAVN_APPLICATION4_IID);
+    }
+
+    #[test]
+    fn clipboard_string_arguments_are_terminated_and_keep_null_distinct() {
+        use std::cell::RefCell;
+        thread_local! {
+            static OBSERVED: RefCell<Option<String>> = const { RefCell::new(None) };
+        }
+        unsafe extern "system" fn query(
+            _: *mut IUnknown,
+            _: *const Guid,
+            _: *mut *mut c_void,
+        ) -> i32 {
+            hresult::E_NOINTERFACE
+        }
+        unsafe extern "system" fn reference(_: *mut IUnknown) -> u32 {
+            1
+        }
+        unsafe extern "system" fn read(_: *mut IAvnClipboardData, value: *const u16) -> i32 {
+            OBSERVED.with(|observed| *observed.borrow_mut() = crate::clone_utf16(value));
+            0
+        }
+        let vtbl = IAvnClipboardDataVtbl {
+            query_interface: query,
+            add_ref: reference,
+            release: reference,
+            set_text: read,
+            add_file_uri: read,
+        };
+        let mut object = IAvnClipboardData { vtbl: &vtbl };
+        let object = unsafe { ComPtr::from_raw(&mut object).unwrap() };
+        for value in [
+            None,
+            Some(&[][..]),
+            Some(&[65, 66][..]),
+            Some(&[65, 0, 66][..]),
+        ] {
+            let expected =
+                value.map(|v| String::from_utf16_lossy(v.split(|c| *c == 0).next().unwrap()));
+            object.set_text(value).unwrap();
+            OBSERVED.with(|observed| assert_eq!(*observed.borrow(), expected));
+            object.add_file_uri(value).unwrap();
+            OBSERVED.with(|observed| assert_eq!(*observed.borrow(), expected));
+        }
     }
 }

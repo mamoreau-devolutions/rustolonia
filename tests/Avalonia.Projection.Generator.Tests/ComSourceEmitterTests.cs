@@ -126,7 +126,7 @@ public class ComSourceEmitterTests
     {
         var ir = ComInterfaceExtractor.Extract(typeof(IAvnEcho).Assembly, new ProjectionPolicy
         {
-            IncludeNamespaces = ["Avalonia.Host.Com"],
+            IncludeTypeNames = [typeof(IAvnEcho).FullName!, typeof(IAvnActivationFactory).FullName!],
         });
         var files = ComSourceEmitter.Emit(ir);
 

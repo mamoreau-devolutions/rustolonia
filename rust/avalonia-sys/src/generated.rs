@@ -133,30 +133,64 @@ pub struct AvnOptionalDateTime {
 }
 
 impl AvnOptionalDateTime {
+    /// Truncates sub-100ns precision toward the Unix epoch.
+    /// Panics if the resulting ticks are outside .NET DateTime.
     pub fn from_date_time(value: Option<std::time::SystemTime>) -> Self {
+        Self::try_from_date_time(value).expect("SystemTime is not representable as .NET DateTime ticks")
+    }
+    /// Truncates sub-100ns precision toward the Unix epoch; checks the resulting ticks.
+    pub fn try_from_date_time(value: Option<std::time::SystemTime>) -> Result<Self> {
         match value {
             Some(time) => {
-                let ticks = time
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|delta| delta.as_nanos() / 100)
-                    .unwrap_or(0) as i64;
-                Self { has_value: 1, ticks: ticks + DOTNET_EPOCH_OFFSET_TICKS }
+                let unix_ticks = match time.duration_since(std::time::UNIX_EPOCH) {
+                    Ok(delta) => duration_ticks(delta)?,
+                    Err(error) => -duration_ticks(error.duration())?,
+                };
+                let ticks = unix_ticks.checked_add(DOTNET_EPOCH_OFFSET_TICKS)
+                    .filter(|ticks| (0..=DOTNET_MAX_DATE_TIME_TICKS).contains(ticks))
+                    .ok_or(Error(hresult::E_INVALIDARG))?;
+                Ok(Self { has_value: 1, ticks })
             }
-            None => Self::default(),
+            None => Ok(Self::default()),
         }
     }
+    /// Panics for invalid ticks or a date unavailable on the platform.
     pub fn to_date_time(self) -> Option<std::time::SystemTime> {
+        self.try_to_date_time().expect("Invalid .NET DateTime ticks")
+    }
+    pub fn try_to_date_time(self) -> Result<Option<std::time::SystemTime>> {
         if self.has_value == 0 {
-            return None;
+            return Ok(None);
+        }
+        if !(0..=DOTNET_MAX_DATE_TIME_TICKS).contains(&self.ticks) {
+            return Err(Error(hresult::E_INVALIDARG));
         }
         let unix_ticks = self.ticks - DOTNET_EPOCH_OFFSET_TICKS;
-        let nanos = (unix_ticks.clamp(0, i64::MAX) as u128) * 100;
-        Some(std::time::UNIX_EPOCH + std::time::Duration::from_nanos(nanos as u64))
+        let delta = ticks_duration(unix_ticks.unsigned_abs());
+        let time = if unix_ticks < 0 {
+            std::time::UNIX_EPOCH.checked_sub(delta)
+        } else {
+            std::time::UNIX_EPOCH.checked_add(delta)
+        };
+        time.map(Some).ok_or(Error(hresult::E_INVALIDARG))
     }
 }
 
 /// Ticks between 0001-01-01 and 1970-01-01 in 100ns units.
 pub const DOTNET_EPOCH_OFFSET_TICKS: i64 = 621_355_968_000_000_000;
+
+pub const DOTNET_MAX_DATE_TIME_TICKS: i64 = 3_155_378_975_999_999_999;
+
+fn duration_ticks(value: core::time::Duration) -> Result<i64> {
+    i64::try_from(value.as_secs()).ok()
+        .and_then(|seconds| seconds.checked_mul(10_000_000))
+        .and_then(|ticks| ticks.checked_add(i64::from(value.subsec_nanos() / 100)))
+        .ok_or(Error(hresult::E_INVALIDARG))
+}
+
+fn ticks_duration(ticks: u64) -> core::time::Duration {
+    core::time::Duration::new(ticks / 10_000_000, ((ticks % 10_000_000) * 100) as u32)
+}
 
 /// Blittable ABI mirror of a nullable TimeSpan tick count.
 #[repr(C)]
@@ -167,21 +201,31 @@ pub struct AvnOptionalTimeSpan {
 }
 
 impl AvnOptionalTimeSpan {
+    /// Truncates sub-100ns precision toward zero.
+    /// Panics if the resulting ticks exceed TimeSpan.
     pub fn from_duration(value: Option<core::time::Duration>) -> Self {
+        Self::try_from_duration(value).expect("Duration is not representable as .NET TimeSpan ticks")
+    }
+    /// Truncates sub-100ns precision toward zero; checks the resulting ticks.
+    pub fn try_from_duration(value: Option<core::time::Duration>) -> Result<Self> {
         match value {
-            Some(duration) => Self {
+            Some(duration) => Ok(Self {
                 has_value: 1,
-                ticks: duration.as_nanos() as i64 / 100,
-            },
-            None => Self::default(),
+                ticks: duration_ticks(duration)?,
+            }),
+            None => Ok(Self::default()),
         }
     }
+    /// Panics for a negative TimeSpan, which Duration cannot represent.
     pub fn to_duration(self) -> Option<core::time::Duration> {
+        self.try_to_duration().expect("Negative .NET TimeSpan cannot be represented as Duration")
+    }
+    pub fn try_to_duration(self) -> Result<Option<core::time::Duration>> {
         if self.has_value == 0 {
-            return None;
+            return Ok(None);
         }
-        let nanos = (self.ticks.max(0) as u128) * 100;
-        Some(core::time::Duration::from_nanos(nanos as u64))
+        let ticks = u64::try_from(self.ticks).map_err(|_| Error(hresult::E_INVALIDARG))?;
+        Ok(Some(ticks_duration(ticks)))
     }
 }
 
@@ -5793,9 +5837,11 @@ impl ComPtr<IAvnStringList> {
         }
     }
     pub fn add(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe { hresult::check(((*self.as_raw()).vtbl.as_ref().unwrap().add)(self.as_raw(), value.as_ptr().cast_mut())) }
     }
     pub fn index_of(&self, value: &[u16]) -> Result<Option<usize>> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let mut index = -1;
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().index_of)(self.as_raw(), value.as_ptr().cast_mut(), &mut index);
@@ -6045,8 +6091,9 @@ impl ComPtr<IAvnAutoCompleteBox> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -6557,6 +6604,7 @@ impl ComPtr<IAvnAutoCompleteBox> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -6571,8 +6619,9 @@ impl ComPtr<IAvnAutoCompleteBox> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -6809,8 +6858,9 @@ impl ComPtr<IAvnAutoCompleteBox> {
         }
     }
     pub fn set_text(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_text)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_text)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -6845,8 +6895,9 @@ impl ComPtr<IAvnAutoCompleteBox> {
         }
     }
     pub fn set_placeholder_text(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_placeholder_text)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_placeholder_text)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -7227,8 +7278,9 @@ impl ComPtr<IAvnBorder> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -7767,6 +7819,7 @@ impl ComPtr<IAvnBorder> {
         }
     }
     pub fn set_box_shadow(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_box_shadow)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -7943,8 +7996,9 @@ impl ComPtr<IAvnButton> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -8455,6 +8509,7 @@ impl ComPtr<IAvnButton> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -8469,8 +8524,9 @@ impl ComPtr<IAvnButton> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -8665,8 +8721,9 @@ impl ComPtr<IAvnButton> {
         }
     }
     pub fn set_hot_key(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -8903,8 +8960,9 @@ impl ComPtr<IAvnButtonSpinner> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -9415,6 +9473,7 @@ impl ComPtr<IAvnButtonSpinner> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -9429,8 +9488,9 @@ impl ComPtr<IAvnButtonSpinner> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -9827,8 +9887,9 @@ impl ComPtr<IAvnCalendar> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -10339,6 +10400,7 @@ impl ComPtr<IAvnCalendar> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -10353,8 +10415,9 @@ impl ComPtr<IAvnCalendar> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -10577,8 +10640,9 @@ impl ComPtr<IAvnCalendar> {
         }
     }
     pub fn set_selected_date(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_selected_date)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_selected_date)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -10599,6 +10663,7 @@ impl ComPtr<IAvnCalendar> {
         }
     }
     pub fn set_display_date(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_display_date)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -10613,8 +10678,9 @@ impl ComPtr<IAvnCalendar> {
         }
     }
     pub fn set_display_date_start(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_display_date_start)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_display_date_start)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -10635,8 +10701,9 @@ impl ComPtr<IAvnCalendar> {
         }
     }
     pub fn set_display_date_end(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_display_date_end)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_display_date_end)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -10861,8 +10928,9 @@ impl ComPtr<IAvnCalendarDatePicker> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -11373,6 +11441,7 @@ impl ComPtr<IAvnCalendarDatePicker> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -11387,8 +11456,9 @@ impl ComPtr<IAvnCalendarDatePicker> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -11507,6 +11577,7 @@ impl ComPtr<IAvnCalendarDatePicker> {
         }
     }
     pub fn set_display_date(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_display_date)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -11521,8 +11592,9 @@ impl ComPtr<IAvnCalendarDatePicker> {
         }
     }
     pub fn set_display_date_start(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_display_date_start)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_display_date_start)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -11535,8 +11607,9 @@ impl ComPtr<IAvnCalendarDatePicker> {
         }
     }
     pub fn set_display_date_end(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_display_date_end)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_display_date_end)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -11591,8 +11664,9 @@ impl ComPtr<IAvnCalendarDatePicker> {
         }
     }
     pub fn set_selected_date(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_selected_date)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_selected_date)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -11619,6 +11693,7 @@ impl ComPtr<IAvnCalendarDatePicker> {
         }
     }
     pub fn set_custom_date_format_string(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_custom_date_format_string)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -11633,8 +11708,9 @@ impl ComPtr<IAvnCalendarDatePicker> {
         }
     }
     pub fn set_text(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_text)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_text)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -11647,8 +11723,9 @@ impl ComPtr<IAvnCalendarDatePicker> {
         }
     }
     pub fn set_placeholder_text(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_placeholder_text)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_placeholder_text)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -11907,8 +11984,9 @@ impl ComPtr<IAvnCanvas> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -12533,8 +12611,9 @@ impl ComPtr<IAvnCarousel> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -13045,6 +13124,7 @@ impl ComPtr<IAvnCarousel> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -13059,8 +13139,9 @@ impl ComPtr<IAvnCarousel> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -13560,8 +13641,9 @@ impl ComPtr<IAvnCheckBox> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -14072,6 +14154,7 @@ impl ComPtr<IAvnCheckBox> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -14086,8 +14169,9 @@ impl ComPtr<IAvnCheckBox> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -14282,8 +14366,9 @@ impl ComPtr<IAvnCheckBox> {
         }
     }
     pub fn set_hot_key(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -14589,8 +14674,9 @@ impl ComPtr<IAvnComboBox> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -15101,6 +15187,7 @@ impl ComPtr<IAvnComboBox> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -15115,8 +15202,9 @@ impl ComPtr<IAvnComboBox> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -15458,8 +15546,9 @@ impl ComPtr<IAvnComboBox> {
         }
     }
     pub fn set_placeholder_text(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_placeholder_text)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_placeholder_text)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -15500,8 +15589,9 @@ impl ComPtr<IAvnComboBox> {
         }
     }
     pub fn set_text(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_text)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_text)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -15685,8 +15775,9 @@ impl ComPtr<IAvnComboBoxItem> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -16197,6 +16288,7 @@ impl ComPtr<IAvnComboBoxItem> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -16211,8 +16303,9 @@ impl ComPtr<IAvnComboBoxItem> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -16556,8 +16649,9 @@ impl ComPtr<IAvnCommandBar> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -17068,6 +17162,7 @@ impl ComPtr<IAvnCommandBar> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -17082,8 +17177,9 @@ impl ComPtr<IAvnCommandBar> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -17598,8 +17694,9 @@ impl ComPtr<IAvnCommandBarButton> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -18110,6 +18207,7 @@ impl ComPtr<IAvnCommandBarButton> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -18124,8 +18222,9 @@ impl ComPtr<IAvnCommandBarButton> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -18320,8 +18419,9 @@ impl ComPtr<IAvnCommandBarButton> {
         }
     }
     pub fn set_hot_key(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -18411,8 +18511,9 @@ impl ComPtr<IAvnCommandBarButton> {
         }
     }
     pub fn set_label(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_label)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_label)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -18628,8 +18729,9 @@ impl ComPtr<IAvnCommandBarSeparator> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -19140,6 +19242,7 @@ impl ComPtr<IAvnCommandBarSeparator> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -19154,8 +19257,9 @@ impl ComPtr<IAvnCommandBarSeparator> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -19466,8 +19570,9 @@ impl ComPtr<IAvnCommandBarToggleButton> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -19978,6 +20083,7 @@ impl ComPtr<IAvnCommandBarToggleButton> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -19992,8 +20098,9 @@ impl ComPtr<IAvnCommandBarToggleButton> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -20188,8 +20295,9 @@ impl ComPtr<IAvnCommandBarToggleButton> {
         }
     }
     pub fn set_hot_key(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -20320,8 +20428,9 @@ impl ComPtr<IAvnCommandBarToggleButton> {
         }
     }
     pub fn set_label(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_label)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_label)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -20541,8 +20650,9 @@ impl ComPtr<IAvnContentControl> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -21053,6 +21163,7 @@ impl ComPtr<IAvnContentControl> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -21067,8 +21178,9 @@ impl ComPtr<IAvnContentControl> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -21422,8 +21534,9 @@ impl ComPtr<IAvnContextMenu> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -21934,6 +22047,7 @@ impl ComPtr<IAvnContextMenu> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -21948,8 +22062,9 @@ impl ComPtr<IAvnContextMenu> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -22560,8 +22675,9 @@ impl ComPtr<IAvnControl> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -23154,8 +23270,9 @@ impl ComPtr<IAvnDatePicker> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -23666,6 +23783,7 @@ impl ComPtr<IAvnDatePicker> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -23680,8 +23798,9 @@ impl ComPtr<IAvnDatePicker> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -23806,6 +23925,7 @@ impl ComPtr<IAvnDatePicker> {
         }
     }
     pub fn set_day_format(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_day_format)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -23834,6 +23954,7 @@ impl ComPtr<IAvnDatePicker> {
         }
     }
     pub fn set_max_year(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_max_year)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -23848,6 +23969,7 @@ impl ComPtr<IAvnDatePicker> {
         }
     }
     pub fn set_min_year(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_min_year)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -23862,6 +23984,7 @@ impl ComPtr<IAvnDatePicker> {
         }
     }
     pub fn set_month_format(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_month_format)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -23890,6 +24013,7 @@ impl ComPtr<IAvnDatePicker> {
         }
     }
     pub fn set_year_format(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_year_format)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -23918,8 +24042,9 @@ impl ComPtr<IAvnDatePicker> {
         }
     }
     pub fn set_selected_date(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_selected_date)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_selected_date)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -24056,8 +24181,9 @@ impl ComPtr<IAvnDecorator> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -24636,8 +24762,9 @@ impl ComPtr<IAvnDockPanel> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -25296,8 +25423,9 @@ impl ComPtr<IAvnDropDownButton> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -25808,6 +25936,7 @@ impl ComPtr<IAvnDropDownButton> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -25822,8 +25951,9 @@ impl ComPtr<IAvnDropDownButton> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -26018,8 +26148,9 @@ impl ComPtr<IAvnDropDownButton> {
         }
     }
     pub fn set_hot_key(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -26262,8 +26393,9 @@ impl ComPtr<IAvnExpander> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -26774,6 +26906,7 @@ impl ComPtr<IAvnExpander> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -26788,8 +26921,9 @@ impl ComPtr<IAvnExpander> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -27182,8 +27316,9 @@ impl ComPtr<IAvnFlexPanel> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -28202,8 +28337,9 @@ impl ComPtr<IAvnGrid> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -28708,6 +28844,7 @@ impl ComPtr<IAvnGrid> {
         }
     }
     pub fn set_column_definitions(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_column_definitions)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -28722,6 +28859,7 @@ impl ComPtr<IAvnGrid> {
         }
     }
     pub fn set_row_definitions(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_row_definitions)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -28881,8 +29019,9 @@ impl ComPtr<IAvnGridSplitter> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -29393,6 +29532,7 @@ impl ComPtr<IAvnGridSplitter> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -29407,8 +29547,9 @@ impl ComPtr<IAvnGridSplitter> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -29769,8 +29910,9 @@ impl ComPtr<IAvnGroupBox> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -30281,6 +30423,7 @@ impl ComPtr<IAvnGroupBox> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -30295,8 +30438,9 @@ impl ComPtr<IAvnGroupBox> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -30649,8 +30793,9 @@ impl ComPtr<IAvnHyperlinkButton> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -31161,6 +31306,7 @@ impl ComPtr<IAvnHyperlinkButton> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -31175,8 +31321,9 @@ impl ComPtr<IAvnHyperlinkButton> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -31371,8 +31518,9 @@ impl ComPtr<IAvnHyperlinkButton> {
         }
     }
     pub fn set_hot_key(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -31476,8 +31624,9 @@ impl ComPtr<IAvnHyperlinkButton> {
         }
     }
     pub fn set_navigate_uri(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_navigate_uri)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_navigate_uri)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -31619,8 +31768,9 @@ impl ComPtr<IAvnIconElement> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -32131,6 +32281,7 @@ impl ComPtr<IAvnIconElement> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -32145,8 +32296,9 @@ impl ComPtr<IAvnIconElement> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -32366,8 +32518,9 @@ impl ComPtr<IAvnImage> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -32808,8 +32961,9 @@ impl ComPtr<IAvnImage> {
         }
     }
     pub fn set_source(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_source)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_source)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -33005,8 +33159,9 @@ impl ComPtr<IAvnItemsControl> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -33517,6 +33672,7 @@ impl ComPtr<IAvnItemsControl> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -33531,8 +33687,9 @@ impl ComPtr<IAvnItemsControl> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -33866,8 +34023,9 @@ impl ComPtr<IAvnLabel> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -34378,6 +34536,7 @@ impl ComPtr<IAvnLabel> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -34392,8 +34551,9 @@ impl ComPtr<IAvnLabel> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -34681,8 +34841,9 @@ impl ComPtr<IAvnLayoutTransformControl> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -35324,8 +35485,9 @@ impl ComPtr<IAvnListBox> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -35836,6 +35998,7 @@ impl ComPtr<IAvnListBox> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -35850,8 +36013,9 @@ impl ComPtr<IAvnListBox> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -36308,8 +36472,9 @@ impl ComPtr<IAvnListBoxItem> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -36820,6 +36985,7 @@ impl ComPtr<IAvnListBoxItem> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -36834,8 +37000,9 @@ impl ComPtr<IAvnListBoxItem> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -37248,8 +37415,9 @@ impl ComPtr<IAvnMaskedTextBox> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -37760,6 +37928,7 @@ impl ComPtr<IAvnMaskedTextBox> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -37774,8 +37943,9 @@ impl ComPtr<IAvnMaskedTextBox> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -38124,8 +38294,9 @@ impl ComPtr<IAvnMaskedTextBox> {
         }
     }
     pub fn set_text(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_text)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_text)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -38138,6 +38309,7 @@ impl ComPtr<IAvnMaskedTextBox> {
         }
     }
     pub fn set_selected_text(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_selected_text)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -38194,8 +38366,9 @@ impl ComPtr<IAvnMaskedTextBox> {
         }
     }
     pub fn set_placeholder_text(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_placeholder_text)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_placeholder_text)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -38292,6 +38465,7 @@ impl ComPtr<IAvnMaskedTextBox> {
         }
     }
     pub fn set_new_line(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_new_line)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -38528,8 +38702,9 @@ impl ComPtr<IAvnMaskedTextBox> {
         }
     }
     pub fn set_mask(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_mask)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_mask)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -38762,8 +38937,9 @@ impl ComPtr<IAvnMenu> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -39274,6 +39450,7 @@ impl ComPtr<IAvnMenu> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -39288,8 +39465,9 @@ impl ComPtr<IAvnMenu> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -39789,8 +39967,9 @@ impl ComPtr<IAvnMenuBase> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -40301,6 +40480,7 @@ impl ComPtr<IAvnMenuBase> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -40315,8 +40495,9 @@ impl ComPtr<IAvnMenuBase> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -41196,8 +41377,9 @@ impl ComPtr<IAvnMenuItem> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -41708,6 +41890,7 @@ impl ComPtr<IAvnMenuItem> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -41722,8 +41905,9 @@ impl ComPtr<IAvnMenuItem> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -42057,8 +42241,9 @@ impl ComPtr<IAvnMenuItem> {
         }
     }
     pub fn set_hot_key(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -42099,8 +42284,9 @@ impl ComPtr<IAvnMenuItem> {
         }
     }
     pub fn set_input_gesture(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_input_gesture)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_input_gesture)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -42183,8 +42369,9 @@ impl ComPtr<IAvnMenuItem> {
         }
     }
     pub fn set_group_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_group_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_group_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -42396,8 +42583,9 @@ impl ComPtr<IAvnNotificationCard> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -42908,6 +43096,7 @@ impl ComPtr<IAvnNotificationCard> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -42922,8 +43111,9 @@ impl ComPtr<IAvnNotificationCard> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -43283,8 +43473,9 @@ impl ComPtr<IAvnWindowNotificationManager> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -43795,6 +43986,7 @@ impl ComPtr<IAvnWindowNotificationManager> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -43809,8 +44001,9 @@ impl ComPtr<IAvnWindowNotificationManager> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -44148,8 +44341,9 @@ impl ComPtr<IAvnNumericUpDown> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -44660,6 +44854,7 @@ impl ComPtr<IAvnNumericUpDown> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -44674,8 +44869,9 @@ impl ComPtr<IAvnNumericUpDown> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -44842,6 +45038,7 @@ impl ComPtr<IAvnNumericUpDown> {
         }
     }
     pub fn set_format_string(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_format_string)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -44856,6 +45053,7 @@ impl ComPtr<IAvnNumericUpDown> {
         }
     }
     pub fn set_increment(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_increment)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -44884,6 +45082,7 @@ impl ComPtr<IAvnNumericUpDown> {
         }
     }
     pub fn set_maximum(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_maximum)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -44898,6 +45097,7 @@ impl ComPtr<IAvnNumericUpDown> {
         }
     }
     pub fn set_minimum(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_minimum)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -44912,8 +45112,9 @@ impl ComPtr<IAvnNumericUpDown> {
         }
     }
     pub fn set_text(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_text)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_text)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -44926,8 +45127,9 @@ impl ComPtr<IAvnNumericUpDown> {
         }
     }
     pub fn set_value(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_value)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_value)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -44940,8 +45142,9 @@ impl ComPtr<IAvnNumericUpDown> {
         }
     }
     pub fn set_placeholder_text(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_placeholder_text)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_placeholder_text)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -45168,8 +45371,9 @@ impl ComPtr<IAvnPanel> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -45763,8 +45967,9 @@ impl ComPtr<IAvnPathIcon> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -46275,6 +46480,7 @@ impl ComPtr<IAvnPathIcon> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -46289,8 +46495,9 @@ impl ComPtr<IAvnPathIcon> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -46401,8 +46608,9 @@ impl ComPtr<IAvnPathIcon> {
         }
     }
     pub fn set_data(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_data)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_data)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -46558,8 +46766,9 @@ impl ComPtr<IAvnPipsPager> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -47070,6 +47279,7 @@ impl ComPtr<IAvnPipsPager> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -47084,8 +47294,9 @@ impl ComPtr<IAvnPipsPager> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -47540,8 +47751,9 @@ impl ComPtr<IAvnHeaderedContentControl> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -48052,6 +48264,7 @@ impl ComPtr<IAvnHeaderedContentControl> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -48066,8 +48279,9 @@ impl ComPtr<IAvnHeaderedContentControl> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -48407,8 +48621,9 @@ impl ComPtr<IAvnHeaderedItemsControl> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -48919,6 +49134,7 @@ impl ComPtr<IAvnHeaderedItemsControl> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -48933,8 +49149,9 @@ impl ComPtr<IAvnHeaderedItemsControl> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -49316,8 +49533,9 @@ impl ComPtr<IAvnHeaderedSelectingItemsControl> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -49828,6 +50046,7 @@ impl ComPtr<IAvnHeaderedSelectingItemsControl> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -49842,8 +50061,9 @@ impl ComPtr<IAvnHeaderedSelectingItemsControl> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -50310,8 +50530,9 @@ impl ComPtr<IAvnPopup> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -51525,8 +51746,9 @@ impl ComPtr<IAvnRangeBase> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -52037,6 +52259,7 @@ impl ComPtr<IAvnRangeBase> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -52051,8 +52274,9 @@ impl ComPtr<IAvnRangeBase> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -52401,8 +52625,9 @@ impl ComPtr<IAvnSelectingItemsControl> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -52913,6 +53138,7 @@ impl ComPtr<IAvnSelectingItemsControl> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -52927,8 +53153,9 @@ impl ComPtr<IAvnSelectingItemsControl> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -53349,8 +53576,9 @@ impl ComPtr<IAvnTemplatedControl> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -53861,6 +54089,7 @@ impl ComPtr<IAvnTemplatedControl> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -53875,8 +54104,9 @@ impl ComPtr<IAvnTemplatedControl> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -54122,8 +54352,9 @@ impl ComPtr<IAvnThumb> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -54634,6 +54865,7 @@ impl ComPtr<IAvnThumb> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -54648,8 +54880,9 @@ impl ComPtr<IAvnThumb> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -54959,8 +55192,9 @@ impl ComPtr<IAvnToggleButton> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -55471,6 +55705,7 @@ impl ComPtr<IAvnToggleButton> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -55485,8 +55720,9 @@ impl ComPtr<IAvnToggleButton> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -55681,8 +55917,9 @@ impl ComPtr<IAvnToggleButton> {
         }
     }
     pub fn set_hot_key(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -55927,8 +56164,9 @@ impl ComPtr<IAvnUniformGrid> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -56611,8 +56849,9 @@ impl ComPtr<IAvnProgressBar> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -57123,6 +57362,7 @@ impl ComPtr<IAvnProgressBar> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -57137,8 +57377,9 @@ impl ComPtr<IAvnProgressBar> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -57368,6 +57609,7 @@ impl ComPtr<IAvnProgressBar> {
         }
     }
     pub fn set_progress_text_format(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_progress_text_format)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -57558,8 +57800,9 @@ impl ComPtr<IAvnRadioButton> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -58070,6 +58313,7 @@ impl ComPtr<IAvnRadioButton> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -58084,8 +58328,9 @@ impl ComPtr<IAvnRadioButton> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -58280,8 +58525,9 @@ impl ComPtr<IAvnRadioButton> {
         }
     }
     pub fn set_hot_key(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -58412,8 +58658,9 @@ impl ComPtr<IAvnRadioButton> {
         }
     }
     pub fn set_group_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_group_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_group_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -58570,8 +58817,9 @@ impl ComPtr<IAvnRefreshContainer> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -59082,6 +59330,7 @@ impl ComPtr<IAvnRefreshContainer> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -59096,8 +59345,9 @@ impl ComPtr<IAvnRefreshContainer> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -59415,8 +59665,9 @@ impl ComPtr<IAvnRelativePanel> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -60037,8 +60288,9 @@ impl ComPtr<IAvnRepeatButton> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -60549,6 +60801,7 @@ impl ComPtr<IAvnRepeatButton> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -60563,8 +60816,9 @@ impl ComPtr<IAvnRepeatButton> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -60759,8 +61013,9 @@ impl ComPtr<IAvnRepeatButton> {
         }
     }
     pub fn set_hot_key(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -61060,8 +61315,9 @@ impl ComPtr<IAvnScrollViewer> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -61572,6 +61828,7 @@ impl ComPtr<IAvnScrollViewer> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -61586,8 +61843,9 @@ impl ComPtr<IAvnScrollViewer> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -62215,8 +62473,9 @@ impl ComPtr<IAvnSelectableTextBlock> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -62685,8 +62944,9 @@ impl ComPtr<IAvnSelectableTextBlock> {
         }
     }
     pub fn set_text(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_text)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_text)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -62699,6 +62959,7 @@ impl ComPtr<IAvnSelectableTextBlock> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -62853,6 +63114,7 @@ impl ComPtr<IAvnSelectableTextBlock> {
         }
     }
     pub fn set_text_trimming(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_text_trimming)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -62881,8 +63143,9 @@ impl ComPtr<IAvnSelectableTextBlock> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -63141,8 +63404,9 @@ impl ComPtr<IAvnSeparator> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -63653,6 +63917,7 @@ impl ComPtr<IAvnSeparator> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -63667,8 +63932,9 @@ impl ComPtr<IAvnSeparator> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -63902,8 +64168,9 @@ impl ComPtr<IAvnArc> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -64386,8 +64653,9 @@ impl ComPtr<IAvnArc> {
         }
     }
     pub fn set_stroke_dash_array(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_stroke_dash_array)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_stroke_dash_array)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -64617,8 +64885,9 @@ impl ComPtr<IAvnEllipse> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -65101,8 +65370,9 @@ impl ComPtr<IAvnEllipse> {
         }
     }
     pub fn set_stroke_dash_array(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_stroke_dash_array)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_stroke_dash_array)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -65308,8 +65578,9 @@ impl ComPtr<IAvnLine> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -65792,8 +66063,9 @@ impl ComPtr<IAvnLine> {
         }
     }
     pub fn set_stroke_dash_array(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_stroke_dash_array)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_stroke_dash_array)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -66025,8 +66297,9 @@ impl ComPtr<IAvnPath> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -66509,8 +66782,9 @@ impl ComPtr<IAvnPath> {
         }
     }
     pub fn set_stroke_dash_array(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_stroke_dash_array)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_stroke_dash_array)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -66593,8 +66867,9 @@ impl ComPtr<IAvnPath> {
         }
     }
     pub fn set_data(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_data)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_data)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -66730,8 +67005,9 @@ impl ComPtr<IAvnPolygon> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -67214,8 +67490,9 @@ impl ComPtr<IAvnPolygon> {
         }
     }
     pub fn set_stroke_dash_array(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_stroke_dash_array)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_stroke_dash_array)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -67298,6 +67575,7 @@ impl ComPtr<IAvnPolygon> {
         }
     }
     pub fn set_points(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_points)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -67449,8 +67727,9 @@ impl ComPtr<IAvnPolyline> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -67933,8 +68212,9 @@ impl ComPtr<IAvnPolyline> {
         }
     }
     pub fn set_stroke_dash_array(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_stroke_dash_array)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_stroke_dash_array)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -68017,6 +68297,7 @@ impl ComPtr<IAvnPolyline> {
         }
     }
     pub fn set_points(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_points)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -68168,8 +68449,9 @@ impl ComPtr<IAvnRectangle> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -68652,8 +68934,9 @@ impl ComPtr<IAvnRectangle> {
         }
     }
     pub fn set_stroke_dash_array(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_stroke_dash_array)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_stroke_dash_array)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -68887,8 +69170,9 @@ impl ComPtr<IAvnSector> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -69371,8 +69655,9 @@ impl ComPtr<IAvnSector> {
         }
     }
     pub fn set_stroke_dash_array(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_stroke_dash_array)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_stroke_dash_array)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -69602,8 +69887,9 @@ impl ComPtr<IAvnShape> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -70086,8 +70372,9 @@ impl ComPtr<IAvnShape> {
         }
     }
     pub fn set_stroke_dash_array(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_stroke_dash_array)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_stroke_dash_array)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -70323,8 +70610,9 @@ impl ComPtr<IAvnSlider> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -70835,6 +71123,7 @@ impl ComPtr<IAvnSlider> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -70849,8 +71138,9 @@ impl ComPtr<IAvnSlider> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -71044,8 +71334,9 @@ impl ComPtr<IAvnSlider> {
         }
     }
     pub fn set_ticks(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_ticks)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_ticks)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -71269,8 +71560,9 @@ impl ComPtr<IAvnSpinner> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -71781,6 +72073,7 @@ impl ComPtr<IAvnSpinner> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -71795,8 +72088,9 @@ impl ComPtr<IAvnSpinner> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -72137,8 +72431,9 @@ impl ComPtr<IAvnSplitButton> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -72649,6 +72944,7 @@ impl ComPtr<IAvnSplitButton> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -72663,8 +72959,9 @@ impl ComPtr<IAvnSplitButton> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -72873,8 +73170,9 @@ impl ComPtr<IAvnSplitButton> {
         }
     }
     pub fn set_hot_key(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -73063,8 +73361,9 @@ impl ComPtr<IAvnSplitView> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -73575,6 +73874,7 @@ impl ComPtr<IAvnSplitView> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -73589,8 +73889,9 @@ impl ComPtr<IAvnSplitView> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -74047,8 +74348,9 @@ impl ComPtr<IAvnStackPanel> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -74734,8 +75036,9 @@ impl ComPtr<IAvnTabControl> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -75246,6 +75549,7 @@ impl ComPtr<IAvnTabControl> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -75260,8 +75564,9 @@ impl ComPtr<IAvnTabControl> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -75789,8 +76094,9 @@ impl ComPtr<IAvnTabItem> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -76301,6 +76607,7 @@ impl ComPtr<IAvnTabItem> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -76315,8 +76622,9 @@ impl ComPtr<IAvnTabItem> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -76738,8 +77046,9 @@ impl ComPtr<IAvnTableView> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -77250,6 +77559,7 @@ impl ComPtr<IAvnTableView> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -77264,8 +77574,9 @@ impl ComPtr<IAvnTableView> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -77748,8 +78059,9 @@ impl ComPtr<IAvnTableViewCell> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -78260,6 +78572,7 @@ impl ComPtr<IAvnTableViewCell> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -78274,8 +78587,9 @@ impl ComPtr<IAvnTableViewCell> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -78518,8 +78832,9 @@ impl ComPtr<IAvnTableViewColumn> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -78692,6 +79007,7 @@ impl ComPtr<IAvnTableViewColumn> {
         }
     }
     pub fn set_width(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_width)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -78931,8 +79247,9 @@ impl ComPtr<IAvnTableViewRow> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -79443,6 +79760,7 @@ impl ComPtr<IAvnTableViewRow> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -79457,8 +79775,9 @@ impl ComPtr<IAvnTableViewRow> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -79776,8 +80095,9 @@ impl ComPtr<IAvnTextBlock> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -80246,8 +80566,9 @@ impl ComPtr<IAvnTextBlock> {
         }
     }
     pub fn set_text(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_text)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_text)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -80260,6 +80581,7 @@ impl ComPtr<IAvnTextBlock> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -80414,6 +80736,7 @@ impl ComPtr<IAvnTextBlock> {
         }
     }
     pub fn set_text_trimming(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_text_trimming)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -80442,8 +80765,9 @@ impl ComPtr<IAvnTextBlock> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -80688,8 +81012,9 @@ impl ComPtr<IAvnTextBox> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -81200,6 +81525,7 @@ impl ComPtr<IAvnTextBox> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -81214,8 +81540,9 @@ impl ComPtr<IAvnTextBox> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -81564,8 +81891,9 @@ impl ComPtr<IAvnTextBox> {
         }
     }
     pub fn set_text(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_text)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_text)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -81578,6 +81906,7 @@ impl ComPtr<IAvnTextBox> {
         }
     }
     pub fn set_selected_text(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_selected_text)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -81634,8 +81963,9 @@ impl ComPtr<IAvnTextBox> {
         }
     }
     pub fn set_placeholder_text(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_placeholder_text)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_placeholder_text)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -81732,6 +82062,7 @@ impl ComPtr<IAvnTextBox> {
         }
     }
     pub fn set_new_line(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_new_line)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -82047,8 +82378,9 @@ impl ComPtr<IAvnThemeVariantScope> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -82517,8 +82849,9 @@ impl ComPtr<IAvnThemeVariantScope> {
         }
     }
     pub fn set_requested_theme_variant(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_requested_theme_variant)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_requested_theme_variant)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -82675,8 +83008,9 @@ impl ComPtr<IAvnTimePicker> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -83187,6 +83521,7 @@ impl ComPtr<IAvnTimePicker> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -83201,8 +83536,9 @@ impl ComPtr<IAvnTimePicker> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -83355,6 +83691,7 @@ impl ComPtr<IAvnTimePicker> {
         }
     }
     pub fn set_clock_identifier(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_clock_identifier)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -83383,8 +83720,9 @@ impl ComPtr<IAvnTimePicker> {
         }
     }
     pub fn set_selected_time(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_selected_time)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_selected_time)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -83567,8 +83905,9 @@ impl ComPtr<IAvnToggleSplitButton> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -84079,6 +84418,7 @@ impl ComPtr<IAvnToggleSplitButton> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -84093,8 +84433,9 @@ impl ComPtr<IAvnToggleSplitButton> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -84303,8 +84644,9 @@ impl ComPtr<IAvnToggleSplitButton> {
         }
     }
     pub fn set_hot_key(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -84525,8 +84867,9 @@ impl ComPtr<IAvnToggleSwitch> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -85037,6 +85380,7 @@ impl ComPtr<IAvnToggleSwitch> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -85051,8 +85395,9 @@ impl ComPtr<IAvnToggleSwitch> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -85247,8 +85592,9 @@ impl ComPtr<IAvnToggleSwitch> {
         }
     }
     pub fn set_hot_key(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_hot_key)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -85572,8 +85918,9 @@ impl ComPtr<IAvnToolTip> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -86084,6 +86431,7 @@ impl ComPtr<IAvnToolTip> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -86098,8 +86446,9 @@ impl ComPtr<IAvnToolTip> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -86407,8 +86756,9 @@ impl ComPtr<IAvnTransitioningContentControl> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -86919,6 +87269,7 @@ impl ComPtr<IAvnTransitioningContentControl> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -86933,8 +87284,9 @@ impl ComPtr<IAvnTransitioningContentControl> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -87205,8 +87557,9 @@ impl ComPtr<IAvnTrayIcon> {
         }
     }
     pub fn set_icon(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_icon)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_icon)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -87219,8 +87572,9 @@ impl ComPtr<IAvnTrayIcon> {
         }
     }
     pub fn set_tool_tip_text(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_tool_tip_text)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_tool_tip_text)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -87417,8 +87771,9 @@ impl ComPtr<IAvnTreeView> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -87929,6 +88284,7 @@ impl ComPtr<IAvnTreeView> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -87943,8 +88299,9 @@ impl ComPtr<IAvnTreeView> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -88400,8 +88757,9 @@ impl ComPtr<IAvnTreeViewItem> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -88912,6 +89270,7 @@ impl ComPtr<IAvnTreeViewItem> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -88926,8 +89285,9 @@ impl ComPtr<IAvnTreeViewItem> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -89349,8 +89709,9 @@ impl ComPtr<IAvnUserControl> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -89861,6 +90222,7 @@ impl ComPtr<IAvnUserControl> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -89875,8 +90237,9 @@ impl ComPtr<IAvnUserControl> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -90150,8 +90513,9 @@ impl ComPtr<IAvnViewbox> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -90812,8 +91176,9 @@ impl ComPtr<IAvnWindow> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -91324,6 +91689,7 @@ impl ComPtr<IAvnWindow> {
         }
     }
     pub fn set_font_family(&self, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_family)(self.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)
@@ -91338,8 +91704,9 @@ impl ComPtr<IAvnWindow> {
         }
     }
     pub fn set_font_features(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_font_features)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -91520,8 +91887,9 @@ impl ComPtr<IAvnWindow> {
         }
     }
     pub fn set_title(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_title)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_title)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -91698,8 +92066,9 @@ impl ComPtr<IAvnWindow> {
         }
     }
     pub fn set_icon(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_icon)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_icon)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -91907,8 +92276,9 @@ impl ComPtr<IAvnWrapPanel> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -92513,8 +92883,9 @@ impl ComPtr<IAvnStyledElement> {
         }
     }
     pub fn set_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
-            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
+            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_name)(self.as_raw(), value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut()));
             hresult::check(hr)
         }
     }
@@ -93021,6 +93392,7 @@ impl ComPtr<IAvnToolTipStatics> {
         }
     }
     pub fn set_tip(&self, target: &ComPtr<IAvnControl>, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_tip)(self.as_raw(), target.as_raw(), value.as_ptr().cast_mut());
             hresult::check(hr)

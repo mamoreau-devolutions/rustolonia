@@ -25,29 +25,60 @@ pub(crate) fn emit_sys_module(ir: &ProjectionIr) -> String {
          \x20   pub ticks: i64,\n\
          }\n\n\
          impl AvnOptionalDateTime {\n\
+         \x20   /// Truncates sub-100ns precision toward the Unix epoch.\n\
+         \x20   /// Panics if the resulting ticks are outside .NET DateTime.\n\
          \x20   pub fn from_date_time(value: Option<std::time::SystemTime>) -> Self {\n\
+         \x20       Self::try_from_date_time(value).expect(\"SystemTime is not representable as .NET DateTime ticks\")\n\
+         \x20   }\n\
+         \x20   /// Truncates sub-100ns precision toward the Unix epoch; checks the resulting ticks.\n\
+         \x20   pub fn try_from_date_time(value: Option<std::time::SystemTime>) -> Result<Self> {\n\
          \x20       match value {\n\
          \x20           Some(time) => {\n\
-         \x20               let ticks = time\n\
-         \x20                   .duration_since(std::time::UNIX_EPOCH)\n\
-         \x20                   .map(|delta| delta.as_nanos() / 100)\n\
-         \x20                   .unwrap_or(0) as i64;\n\
-         \x20               Self { has_value: 1, ticks: ticks + DOTNET_EPOCH_OFFSET_TICKS }\n\
+         \x20               let unix_ticks = match time.duration_since(std::time::UNIX_EPOCH) {\n\
+         \x20                   Ok(delta) => duration_ticks(delta)?,\n\
+         \x20                   Err(error) => -duration_ticks(error.duration())?,\n\
+         \x20               };\n\
+         \x20               let ticks = unix_ticks.checked_add(DOTNET_EPOCH_OFFSET_TICKS)\n\
+         \x20                   .filter(|ticks| (0..=DOTNET_MAX_DATE_TIME_TICKS).contains(ticks))\n\
+         \x20                   .ok_or(Error(hresult::E_INVALIDARG))?;\n\
+         \x20               Ok(Self { has_value: 1, ticks })\n\
          \x20           }\n\
-         \x20           None => Self::default(),\n\
+         \x20           None => Ok(Self::default()),\n\
          \x20       }\n\
          \x20   }\n\
+         \x20   /// Panics for invalid ticks or a date unavailable on the platform.\n\
          \x20   pub fn to_date_time(self) -> Option<std::time::SystemTime> {\n\
+         \x20       self.try_to_date_time().expect(\"Invalid .NET DateTime ticks\")\n\
+         \x20   }\n\
+         \x20   pub fn try_to_date_time(self) -> Result<Option<std::time::SystemTime>> {\n\
          \x20       if self.has_value == 0 {\n\
-         \x20           return None;\n\
+         \x20           return Ok(None);\n\
+         \x20       }\n\
+         \x20       if !(0..=DOTNET_MAX_DATE_TIME_TICKS).contains(&self.ticks) {\n\
+         \x20           return Err(Error(hresult::E_INVALIDARG));\n\
          \x20       }\n\
          \x20       let unix_ticks = self.ticks - DOTNET_EPOCH_OFFSET_TICKS;\n\
-         \x20       let nanos = (unix_ticks.clamp(0, i64::MAX) as u128) * 100;\n\
-         \x20       Some(std::time::UNIX_EPOCH + std::time::Duration::from_nanos(nanos as u64))\n\
+         \x20       let delta = ticks_duration(unix_ticks.unsigned_abs());\n\
+         \x20       let time = if unix_ticks < 0 {\n\
+         \x20           std::time::UNIX_EPOCH.checked_sub(delta)\n\
+         \x20       } else {\n\
+         \x20           std::time::UNIX_EPOCH.checked_add(delta)\n\
+         \x20       };\n\
+         \x20       time.map(Some).ok_or(Error(hresult::E_INVALIDARG))\n\
          \x20   }\n\
          }\n\n\
          /// Ticks between 0001-01-01 and 1970-01-01 in 100ns units.\n\
          pub const DOTNET_EPOCH_OFFSET_TICKS: i64 = 621_355_968_000_000_000;\n\n\
+         pub const DOTNET_MAX_DATE_TIME_TICKS: i64 = 3_155_378_975_999_999_999;\n\n\
+         fn duration_ticks(value: core::time::Duration) -> Result<i64> {\n\
+         \x20   i64::try_from(value.as_secs()).ok()\n\
+         \x20       .and_then(|seconds| seconds.checked_mul(10_000_000))\n\
+         \x20       .and_then(|ticks| ticks.checked_add(i64::from(value.subsec_nanos() / 100)))\n\
+         \x20       .ok_or(Error(hresult::E_INVALIDARG))\n\
+         }\n\n\
+         fn ticks_duration(ticks: u64) -> core::time::Duration {\n\
+         \x20   core::time::Duration::new(ticks / 10_000_000, ((ticks % 10_000_000) * 100) as u32)\n\
+         }\n\n\
          /// Blittable ABI mirror of a nullable TimeSpan tick count.\n\
          #[repr(C)]\n\
          #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]\n\
@@ -56,21 +87,31 @@ pub(crate) fn emit_sys_module(ir: &ProjectionIr) -> String {
          \x20   pub ticks: i64,\n\
          }\n\n\
          impl AvnOptionalTimeSpan {\n\
+         \x20   /// Truncates sub-100ns precision toward zero.\n\
+         \x20   /// Panics if the resulting ticks exceed TimeSpan.\n\
          \x20   pub fn from_duration(value: Option<core::time::Duration>) -> Self {\n\
+         \x20       Self::try_from_duration(value).expect(\"Duration is not representable as .NET TimeSpan ticks\")\n\
+         \x20   }\n\
+         \x20   /// Truncates sub-100ns precision toward zero; checks the resulting ticks.\n\
+         \x20   pub fn try_from_duration(value: Option<core::time::Duration>) -> Result<Self> {\n\
          \x20       match value {\n\
-         \x20           Some(duration) => Self {\n\
+         \x20           Some(duration) => Ok(Self {\n\
          \x20               has_value: 1,\n\
-         \x20               ticks: duration.as_nanos() as i64 / 100,\n\
-         \x20           },\n\
-         \x20           None => Self::default(),\n\
+         \x20               ticks: duration_ticks(duration)?,\n\
+         \x20           }),\n\
+         \x20           None => Ok(Self::default()),\n\
          \x20       }\n\
          \x20   }\n\
+         \x20   /// Panics for a negative TimeSpan, which Duration cannot represent.\n\
          \x20   pub fn to_duration(self) -> Option<core::time::Duration> {\n\
+         \x20       self.try_to_duration().expect(\"Negative .NET TimeSpan cannot be represented as Duration\")\n\
+         \x20   }\n\
+         \x20   pub fn try_to_duration(self) -> Result<Option<core::time::Duration>> {\n\
          \x20       if self.has_value == 0 {\n\
-         \x20           return None;\n\
+         \x20           return Ok(None);\n\
          \x20       }\n\
-         \x20       let nanos = (self.ticks.max(0) as u128) * 100;\n\
-         \x20       Some(core::time::Duration::from_nanos(nanos as u64))\n\
+         \x20       let ticks = u64::try_from(self.ticks).map_err(|_| Error(hresult::E_INVALIDARG))?;\n\
+         \x20       Ok(Some(ticks_duration(ticks)))\n\
          \x20   }\n\
          }\n\n\
          /// Blittable ABI mirror of Avalonia.PixelPoint.\n\
@@ -253,9 +294,11 @@ fn emit_collection(collection: &ProjectedProperty) -> String {
              \x20       }\n\
              \x20   }\n\
              \x20   pub fn add(&self, value: &[u16]) -> Result<()> {\n\
+             \x20       let value = crate::terminated_utf16(value);\n\
              \x20       unsafe { hresult::check(((*self.as_raw()).vtbl.as_ref().unwrap().add)(self.as_raw(), value.as_ptr().cast_mut())) }\n\
              \x20   }\n\
              \x20   pub fn index_of(&self, value: &[u16]) -> Result<Option<usize>> {\n\
+             \x20       let value = crate::terminated_utf16(value);\n\
              \x20       unsafe {\n\
              \x20           let mut index = -1;\n\
              \x20           let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().index_of)(self.as_raw(), value.as_ptr().cast_mut(), &mut index);\n\
@@ -1529,6 +1572,7 @@ fn emit_attached_statics(properties: &[&ProjectedAttachedProperty]) -> String {
             "StringUtf16" => "&[u16]".to_string(),
             _ => rust_abi_type(&property.kind, None, property.is_nullable),
         };
+        let prepare = prepare_string_input(&property.kind, "value", false);
         out.push_str(&format!(
             "    pub fn get_{snake}(&self, target: &ComPtr<IAvnControl>) -> Result<{get_type}> {{\n\
              \x20       unsafe {{\n\
@@ -1538,6 +1582,7 @@ fn emit_attached_statics(properties: &[&ProjectedAttachedProperty]) -> String {
              \x20       }}\n\
              \x20   }}\n\
              \x20   pub fn set_{snake}(&self, target: &ComPtr<IAvnControl>, value: {set_type}) -> Result<()> {{\n\
+             {prepare}\
              \x20       unsafe {{\n\
              \x20           let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_{snake})(self.as_raw(), target.as_raw(), {input});\n\
              \x20           hresult::check(hr)\n\
@@ -1623,8 +1668,9 @@ fn emit_property(ty: &ProjectedType, property: &ProjectedProperty) -> String {
     }
     if property.can_write {
         let (argument_type, argument_value) = rust_property_input(property);
+        let prepare = prepare_string_input(&property.kind, "value", property.is_nullable);
         out.push_str(&format!(
-            "    pub fn set_{snake}(&self, value: {argument_type}) -> Result<()> {{\n        unsafe {{\n            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_{snake})(self.as_raw(), {argument_value});\n            hresult::check(hr)\n        }}\n    }}\n"
+            "    pub fn set_{snake}(&self, value: {argument_type}) -> Result<()> {{\n{prepare}        unsafe {{\n            let hr = ((*self.as_raw()).vtbl.as_ref().unwrap().set_{snake})(self.as_raw(), {argument_value});\n            hresult::check(hr)\n        }}\n    }}\n"
         ));
     }
     let _ = ty;
@@ -1645,6 +1691,13 @@ fn emit_method(_ty: &ProjectedType, method: &ProjectedMethod) -> String {
         .filter(|p| p.direction == "Out")
         .collect();
     let mut body = String::new();
+    for parameter in method.parameters.iter().filter(|p| p.direction != "Out") {
+        body.push_str(&prepare_string_input(
+            &parameter.kind,
+            &to_snake(&parameter.name),
+            parameter.is_nullable,
+        ));
+    }
     for parameter in &out_params {
         body.push_str(&format!(
             "            let mut {}: {} = {};\n",
@@ -1874,13 +1927,25 @@ fn rust_property_result(property: &ProjectedProperty) -> String {
     }
 }
 
+fn prepare_string_input(kind: &str, name: &str, is_nullable: bool) -> String {
+    if kind != "StringUtf16" {
+        return String::new();
+    }
+    let value = if is_nullable {
+        format!("{name}.map(crate::terminated_utf16)")
+    } else {
+        format!("crate::terminated_utf16({name})")
+    };
+    format!("        let {name} = {value};\n")
+}
+
 fn rust_property_input(property: &ProjectedProperty) -> (String, String) {
     match property.kind.as_str() {
         "Bool" => ("bool".into(), "i32::from(value)".into()),
         "NullableBool" => ("Option<bool>".into(), "value.map_or(-1, i32::from)".into()),
         "StringUtf16" if property.is_nullable => (
             "Option<&[u16]>".into(),
-            "value.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut())".into(),
+            "value.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut())".into(),
         ),
         "StringUtf16" => ("&[u16]".into(), "value.as_ptr().cast_mut()".into()),
         "Variant" => ("&AvnVariant".into(), "*value".into()),
@@ -1939,7 +2004,7 @@ fn rust_parameter_call_value(parameter: &ProjectedParameter) -> String {
         "Bool" => format!("i32::from({name})"),
         "NullableBool" => format!("{name}.map_or(-1, i32::from)"),
         "StringUtf16" if parameter.is_nullable => {
-            format!("{name}.map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut())")
+            format!("{name}.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut())")
         }
         "StringUtf16" => format!("{name}.as_ptr().cast_mut()"),
         "ComInterface" | "Notification" if parameter.is_nullable => {

@@ -1,4 +1,4 @@
-﻿use crate::async_runtime::{decode_none, decode_string, ScopedTask};
+use crate::async_runtime::{decode_none, decode_string, TaskScope};
 use crate::{AsyncOperation, Error, Result, Window};
 use avalonia_sys as sys;
 use std::any::Any;
@@ -112,7 +112,7 @@ pub struct AppScope {
 struct AppScopeState {
     subscriptions: Mutex<Vec<PersistentSubscription>>,
     objects: Mutex<Vec<Box<dyn Any + Send>>>,
-    tasks: Mutex<Vec<Arc<ScopedTask>>>,
+    tasks: Arc<TaskScope>,
     windows: Mutex<Vec<Window>>,
 }
 
@@ -123,7 +123,7 @@ impl AppScope {
             state: Arc::new(AppScopeState {
                 subscriptions: Mutex::new(Vec::new()),
                 objects: Mutex::new(Vec::new()),
-                tasks: Mutex::new(Vec::new()),
+                tasks: Arc::new(TaskScope::default()),
                 windows: Mutex::new(Vec::new()),
             }),
         }
@@ -199,13 +199,9 @@ impl AppScope {
     }
 
     pub fn spawn(&self, future: impl Future<Output = ()> + Send + 'static) -> Result<()> {
-        let task = ScopedTask::spawn(self.context.dispatcher.clone(), future)?;
         self.state
             .tasks
-            .lock()
-            .expect("application task scope lock poisoned")
-            .push(task);
-        Ok(())
+            .spawn(self.context.dispatcher.clone(), future)
     }
 
     pub(crate) fn retain_subscription(&self, subscription: EventSubscription) {
@@ -229,15 +225,7 @@ impl AppScope {
     }
 
     fn clear(&self) {
-        for task in self
-            .state
-            .tasks
-            .lock()
-            .expect("application task scope lock poisoned")
-            .drain(..)
-        {
-            task.cancel();
-        }
+        self.state.tasks.clear();
         self.state
             .subscriptions
             .lock()

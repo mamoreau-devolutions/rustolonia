@@ -3,8 +3,7 @@ use avalonia_sys as sys;
 use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::task::{Context, Poll, Wake, Waker};
 
 #[derive(Debug)]
@@ -26,6 +25,7 @@ pub(crate) struct AsyncFailure {
 /// one result, plus the waker registered by whichever executor is polling.
 #[derive(Debug)]
 pub(crate) struct CompletionSlot<T> {
+    completed: bool,
     result: Option<std::result::Result<T, AsyncFailure>>,
     waker: Option<Waker>,
 }
@@ -33,6 +33,7 @@ pub(crate) struct CompletionSlot<T> {
 impl<T> Default for CompletionSlot<T> {
     fn default() -> Self {
         Self {
+            completed: false,
             result: None,
             waker: None,
         }
@@ -49,9 +50,10 @@ impl<T> CompletionSlot<T> {
     ) -> sys::Result<()> {
         let waker = {
             let mut state = state.lock().expect("async operation state lock poisoned");
-            if state.result.is_some() {
+            if state.completed {
                 return Err(sys::Error(sys::E_FAIL));
             }
+            state.completed = true;
             state.result = Some(result);
             state.waker.take()
         };
@@ -70,6 +72,7 @@ impl<T> CompletionSlot<T> {
                 message: error.message,
             })),
             None => {
+                assert!(!state.completed, "completed operation polled again");
                 state.waker = Some(context.waker().clone());
                 Poll::Pending
             }
@@ -77,11 +80,10 @@ impl<T> CompletionSlot<T> {
     }
 
     pub(crate) fn is_pending(state: &Arc<Mutex<Self>>) -> bool {
-        state
+        !state
             .lock()
             .expect("async operation state lock poisoned")
-            .result
-            .is_none()
+            .completed
     }
 }
 
@@ -178,36 +180,106 @@ fn decode_completion(
     })
 }
 
-pub(crate) struct ScopedTask {
-    future: Mutex<Option<Pin<Box<dyn Future<Output = ()> + Send>>>>,
+#[derive(Default)]
+pub(crate) struct TaskScope {
+    state: Mutex<ScopeTasks>,
+}
+
+#[derive(Default)]
+struct ScopeTasks {
+    closed: bool,
+    tasks: Vec<Arc<ScopedTask>>,
+}
+
+impl TaskScope {
+    pub(crate) fn spawn(
+        self: &Arc<Self>,
+        dispatcher: sys::ComPtr<sys::IAvnDispatcher>,
+        future: impl Future<Output = ()> + Send + 'static,
+    ) -> Result<()> {
+        let task = Arc::new(ScopedTask {
+            state: Mutex::new(TaskState {
+                future: Some(Box::pin(future)),
+                polling: false,
+                scheduled: false,
+                notified: false,
+                finished: false,
+            }),
+            dispatcher,
+            scope: Arc::downgrade(self),
+        });
+        {
+            let mut state = self.state.lock().expect("task scope lock poisoned");
+            if state.closed {
+                return Err(sys::Error(sys::E_FAIL).into());
+            }
+            state.tasks.push(task.clone());
+        }
+        task.schedule()
+    }
+
+    pub(crate) fn clear(&self) {
+        let tasks = {
+            let mut state = self.state.lock().expect("task scope lock poisoned");
+            state.closed = true;
+            std::mem::take(&mut state.tasks)
+        };
+        for task in tasks {
+            task.cancel();
+        }
+    }
+}
+
+struct TaskState {
+    future: Option<Pin<Box<dyn Future<Output = ()> + Send>>>,
+    polling: bool,
+    scheduled: bool,
+    notified: bool,
+    finished: bool,
+}
+
+struct ScopedTask {
+    state: Mutex<TaskState>,
     dispatcher: sys::ComPtr<sys::IAvnDispatcher>,
-    scheduled: AtomicBool,
+    scope: Weak<TaskScope>,
 }
 
 impl ScopedTask {
-    pub(crate) fn spawn(
-        dispatcher: sys::ComPtr<sys::IAvnDispatcher>,
-        future: impl Future<Output = ()> + Send + 'static,
-    ) -> Result<Arc<Self>> {
-        let task = Arc::new(Self {
-            future: Mutex::new(Some(Box::pin(future))),
-            dispatcher,
-            scheduled: AtomicBool::new(false),
-        });
-        task.clone().schedule()?;
-        Ok(task)
+    fn unregister(&self) {
+        if let Some(scope) = self.scope.upgrade() {
+            let removed = {
+                let mut state = scope.state.lock().expect("task scope lock poisoned");
+                state
+                    .tasks
+                    .iter()
+                    .position(|task| std::ptr::eq(task.as_ref(), self))
+                    .map(|index| state.tasks.swap_remove(index))
+            };
+            drop(removed);
+        }
     }
 
-    pub(crate) fn cancel(&self) {
-        self.future
-            .lock()
-            .expect("scoped task lock poisoned")
-            .take();
+    fn cancel(&self) {
+        let future = {
+            let mut state = self.state.lock().expect("scoped task lock poisoned");
+            state.finished = true;
+            state.future.take()
+        };
+        self.unregister();
+        drop(future);
     }
 
     fn schedule(self: Arc<Self>) -> Result<()> {
-        if self.scheduled.swap(true, Ordering::AcqRel) {
-            return Ok(());
+        {
+            let mut state = self.state.lock().expect("scoped task lock poisoned");
+            if state.finished {
+                return Ok(());
+            }
+            state.notified = true;
+            if state.polling || state.scheduled {
+                return Ok(());
+            }
+            state.scheduled = true;
         }
         let dispatcher = self.dispatcher.clone();
         let task = self.clone();
@@ -215,24 +287,52 @@ impl ScopedTask {
             task.poll();
             Ok(())
         });
-        dispatcher.post(&action)?;
+        if let Err(error) = dispatcher.post(&action) {
+            self.cancel();
+            return Err(error.into());
+        }
         Ok(())
     }
 
     fn poll(self: Arc<Self>) {
-        self.scheduled.store(false, Ordering::Release);
-        let future = self
-            .future
-            .lock()
-            .expect("scoped task lock poisoned")
-            .take();
-        let Some(mut future) = future else {
-            return;
+        let mut future = {
+            let mut state = self.state.lock().expect("scoped task lock poisoned");
+            state.scheduled = false;
+            if state.finished || state.polling {
+                return;
+            }
+            state.polling = true;
+            state.notified = false;
+            state.future.take().expect("active task future")
         };
         let waker = Waker::from(self.clone());
         let mut context = Context::from_waker(&waker);
-        if future.as_mut().poll(&mut context).is_pending() {
-            *self.future.lock().expect("scoped task lock poisoned") = Some(future);
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            future.as_mut().poll(&mut context)
+        }));
+        let pending = match outcome {
+            Ok(value) => value.is_pending(),
+            Err(error) => {
+                self.cancel();
+                std::panic::resume_unwind(error);
+            }
+        };
+        let mut future = Some(future);
+        let (finished, notified) = {
+            let mut state = self.state.lock().expect("scoped task lock poisoned");
+            state.polling = false;
+            state.finished |= !pending;
+            if !state.finished {
+                state.future = future.take();
+            }
+            (state.finished, state.notified)
+        };
+        if finished {
+            self.unregister();
+        }
+        drop(future);
+        if !finished && notified {
+            let _ = self.schedule();
         }
     }
 }
@@ -240,5 +340,223 @@ impl ScopedTask {
 impl Wake for ScopedTask {
     fn wake(self: Arc<Self>) {
         let _ = self.schedule();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ffi::c_void;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+    struct Noop;
+    impl Wake for Noop {
+        fn wake(self: Arc<Self>) {}
+    }
+
+    #[test]
+    fn consumed_completions_remain_terminal() {
+        for result in [
+            Ok(7),
+            Err(AsyncFailure {
+                hresult: sys::E_FAIL,
+                message: "failure".into(),
+            }),
+        ] {
+            let state = Arc::new(Mutex::new(CompletionSlot::default()));
+            let waker = Waker::from(Arc::new(Noop));
+            let mut cx = Context::from_waker(&waker);
+            assert!(CompletionSlot::is_pending(&state));
+            assert!(CompletionSlot::poll(&state, &mut cx).is_pending());
+            CompletionSlot::publish(&state, result).unwrap();
+            assert!(!CompletionSlot::is_pending(&state));
+            assert!(CompletionSlot::poll(&state, &mut cx).is_ready());
+            assert!(!CompletionSlot::is_pending(&state));
+            assert!(CompletionSlot::publish(&state, Ok(8)).is_err());
+        }
+    }
+
+    #[repr(C)]
+    struct DispatcherVtbl {
+        query:
+            unsafe extern "system" fn(*mut Dispatcher, *const sys::Guid, *mut *mut c_void) -> i32,
+        add: unsafe extern "system" fn(*mut Dispatcher) -> u32,
+        release: unsafe extern "system" fn(*mut Dispatcher) -> u32,
+        access: unsafe extern "system" fn(*mut Dispatcher, *mut i32) -> i32,
+        post: unsafe extern "system" fn(*mut Dispatcher, *mut sys::IAvnAction) -> i32,
+    }
+
+    #[repr(C)]
+    struct Dispatcher {
+        vtbl: &'static DispatcherVtbl,
+        queue: Mutex<Vec<sys::ComPtr<sys::IAvnAction>>>,
+        fail: AtomicBool,
+    }
+
+    unsafe extern "system" fn query(
+        _: *mut Dispatcher,
+        _: *const sys::Guid,
+        _: *mut *mut c_void,
+    ) -> i32 {
+        sys::E_FAIL
+    }
+    unsafe extern "system" fn add(this: *mut Dispatcher) -> u32 {
+        Arc::increment_strong_count(this);
+        2
+    }
+    unsafe extern "system" fn release(this: *mut Dispatcher) -> u32 {
+        Arc::decrement_strong_count(this);
+        1
+    }
+    unsafe extern "system" fn access(_: *mut Dispatcher, value: *mut i32) -> i32 {
+        *value = 1;
+        0
+    }
+    unsafe extern "system" fn post(this: *mut Dispatcher, action: *mut sys::IAvnAction) -> i32 {
+        if (*this).fail.load(Ordering::Relaxed) {
+            return sys::E_FAIL;
+        }
+        let action = std::mem::ManuallyDrop::new(sys::ComPtr::from_raw(action).unwrap());
+        (*this).queue.lock().unwrap().push((*action).clone());
+        0
+    }
+    static VTABLE: DispatcherVtbl = DispatcherVtbl {
+        query,
+        add,
+        release,
+        access,
+        post,
+    };
+
+    fn dispatcher() -> (Arc<Dispatcher>, sys::ComPtr<sys::IAvnDispatcher>) {
+        let dispatcher = Arc::new(Dispatcher {
+            vtbl: &VTABLE,
+            queue: Mutex::new(Vec::new()),
+            fail: AtomicBool::new(false),
+        });
+        let raw = Arc::into_raw(dispatcher.clone()) as *mut sys::IAvnDispatcher;
+        (dispatcher, unsafe { sys::ComPtr::from_raw(raw).unwrap() })
+    }
+
+    fn drain(dispatcher: &Dispatcher) {
+        loop {
+            let action = dispatcher.queue.lock().unwrap().pop();
+            let Some(action) = action else { break };
+            unsafe {
+                let table = *(action.as_raw() as *const *const *const c_void);
+                let invoke: unsafe extern "system" fn(*mut sys::IAvnAction) -> i32 =
+                    std::mem::transmute(*table.add(3));
+                assert_eq!(invoke(action.as_raw()), 0);
+            }
+        }
+    }
+
+    #[test]
+    fn completed_tasks_are_removed_and_self_wakes_are_not_lost() {
+        let (dispatcher, raw) = dispatcher();
+        let scope = Arc::new(TaskScope::default());
+        for _ in 0..1000 {
+            scope.spawn(raw.clone(), async {}).unwrap();
+            let weak = Arc::downgrade(&scope.state.lock().unwrap().tasks[0]);
+            drain(&dispatcher);
+            assert!(scope.state.lock().unwrap().tasks.is_empty());
+            assert!(weak.upgrade().is_none());
+        }
+        let polls = Arc::new(AtomicUsize::new(0));
+        let count = polls.clone();
+        scope
+            .spawn(
+                raw,
+                std::future::poll_fn(move |cx| {
+                    if count.fetch_add(1, Ordering::Relaxed) == 0 {
+                        cx.waker().wake_by_ref();
+                        Poll::Pending
+                    } else {
+                        Poll::Ready(())
+                    }
+                }),
+            )
+            .unwrap();
+        drain(&dispatcher);
+        assert_eq!(polls.load(Ordering::Relaxed), 2);
+        assert!(scope.state.lock().unwrap().tasks.is_empty());
+    }
+
+    #[test]
+    fn shutdown_during_poll_does_not_restore_future_or_deadlock() {
+        let (dispatcher, raw) = dispatcher();
+        let scope = Arc::new(TaskScope::default());
+        let owner = scope.clone();
+        scope
+            .spawn(
+                raw.clone(),
+                std::future::poll_fn(move |cx| {
+                    owner.clear();
+                    cx.waker().wake_by_ref();
+                    Poll::<()>::Pending
+                }),
+            )
+            .unwrap();
+        drain(&dispatcher);
+        assert!(scope.state.lock().unwrap().tasks.is_empty());
+        assert!(scope.spawn(raw, async {}).is_err());
+    }
+
+    #[test]
+    fn failed_dispatch_removes_task() {
+        let (dispatcher, raw) = dispatcher();
+        let scope = Arc::new(TaskScope::default());
+        dispatcher.fail.store(true, Ordering::Relaxed);
+        assert!(scope.spawn(raw, async {}).is_err());
+        assert!(scope.state.lock().unwrap().tasks.is_empty());
+    }
+
+    #[test]
+    fn failed_wake_dispatch_cancels_an_already_pending_task() {
+        let (dispatcher, raw) = dispatcher();
+        let scope = Arc::new(TaskScope::default());
+        let saved = Arc::new(Mutex::new(None));
+        let capture = saved.clone();
+        scope
+            .spawn(
+                raw,
+                std::future::poll_fn(move |cx| {
+                    *capture.lock().unwrap() = Some(cx.waker().clone());
+                    Poll::<()>::Pending
+                }),
+            )
+            .unwrap();
+        drain(&dispatcher);
+        assert_eq!(scope.state.lock().unwrap().tasks.len(), 1);
+        dispatcher.fail.store(true, Ordering::Relaxed);
+        saved.lock().unwrap().take().unwrap().wake();
+        assert!(scope.state.lock().unwrap().tasks.is_empty());
+    }
+
+    #[test]
+    fn cancellation_drops_futures_outside_scope_and_task_locks() {
+        struct ReentrantDrop(Arc<TaskScope>, Arc<AtomicBool>);
+        impl Future for ReentrantDrop {
+            type Output = ();
+            fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<()> {
+                Poll::Pending
+            }
+        }
+        impl Drop for ReentrantDrop {
+            fn drop(&mut self) {
+                self.0.clear();
+                self.1.store(true, Ordering::Relaxed);
+            }
+        }
+        let (dispatcher, raw) = dispatcher();
+        let scope = Arc::new(TaskScope::default());
+        let dropped = Arc::new(AtomicBool::new(false));
+        scope
+            .spawn(raw, ReentrantDrop(scope.clone(), dropped.clone()))
+            .unwrap();
+        drain(&dispatcher);
+        scope.clear();
+        assert!(dropped.load(Ordering::Relaxed));
+        assert!(scope.state.lock().unwrap().tasks.is_empty());
     }
 }

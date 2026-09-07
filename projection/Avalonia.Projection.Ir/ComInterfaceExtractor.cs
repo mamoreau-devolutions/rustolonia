@@ -31,7 +31,7 @@ public static class ComInterfaceExtractor
                 continue;
             }
 
-            types.Add(ProjectInterface(type, skipped));
+            types.Add(ProjectInterface(type));
         }
 
         return new ProjectionIr
@@ -46,25 +46,18 @@ public static class ComInterfaceExtractor
         type.IsInterface && type.GetCustomAttributesData().Any(a =>
             a.AttributeType.Name is nameof(GeneratedComInterfaceAttribute) or "GeneratedComInterfaceAttribute");
 
-    private static ProjectedType ProjectInterface(Type type, List<SkippedMember> skipped)
+    private static ProjectedType ProjectInterface(Type type)
     {
         var iid = type.GetCustomAttribute<GuidAttribute>()?.Value;
         var methods = new List<ProjectedMethod>();
 
         foreach (var method in type.GetMethods().OrderBy(m => m.MetadataToken))
         {
-            if (method.IsSpecialName)
-                continue;
-
             if (!TryProjectMethod(method, out var projected, out var reason))
             {
-                skipped.Add(new SkippedMember
-                {
-                    Owner = type.FullName ?? type.Name,
-                    Member = method.Name,
-                    Reason = reason ?? "Unsupported signature",
-                });
-                continue;
+                throw new InvalidOperationException(
+                    $"Cannot project COM interface '{type.FullName}' method '{method.Name}': {reason}. " +
+                    "Omitting a method would change its published vtable.");
             }
 
             methods.Add(projected);
@@ -91,6 +84,14 @@ public static class ComInterfaceExtractor
         projected = null!;
         reason = null;
 
+        if (method.IsSpecialName || method.IsStatic || method.IsGenericMethod ||
+            method.ReturnType != typeof(int) ||
+            method.GetCustomAttribute<PreserveSigAttribute>() is null)
+        {
+            reason = "Only ordinary instance methods returning PreserveSig I32 HRESULT are supported";
+            return false;
+        }
+
         if (!TryMapType(method.ReturnType, out var returnKind, out _, out var returnReason))
         {
             reason = $"Return type: {returnReason}";
@@ -106,6 +107,12 @@ public static class ComInterfaceExtractor
             {
                 pType = pType.GetElementType()!;
                 dir = p.IsOut && !p.IsIn ? ParameterDirection.Out : ParameterDirection.InOut;
+            }
+
+            if (dir == ParameterDirection.InOut || Nullable.GetUnderlyingType(pType) is not null)
+            {
+                reason = $"Parameter '{p.Name}': InOut and nullable value parameters are not supported";
+                return false;
             }
 
             if (!TryMapType(pType, out var kind, out var iface, out var paramReason))

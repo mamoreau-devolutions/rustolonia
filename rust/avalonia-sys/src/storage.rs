@@ -277,9 +277,13 @@ fn optional_raw<T: ComInterface>(value: Option<&ComPtr<T>>) -> *mut T {
 
 impl ComPtr<IAvnFilePickerOptions> {
     pub fn set_title(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
             let vtbl = (*self.as_raw()).vtbl.as_ref().unwrap();
-            hresult::check((vtbl.set_title)(self.as_raw(), optional_utf16(value)))
+            hresult::check((vtbl.set_title)(
+                self.as_raw(),
+                optional_utf16(value.as_deref()),
+            ))
         }
     }
 
@@ -291,21 +295,23 @@ impl ComPtr<IAvnFilePickerOptions> {
     }
 
     pub fn set_suggested_file_name(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
             let vtbl = (*self.as_raw()).vtbl.as_ref().unwrap();
             hresult::check((vtbl.set_suggested_file_name)(
                 self.as_raw(),
-                optional_utf16(value),
+                optional_utf16(value.as_deref()),
             ))
         }
     }
 
     pub fn set_suggested_start_location(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
             let vtbl = (*self.as_raw()).vtbl.as_ref().unwrap();
             hresult::check((vtbl.set_suggested_start_location)(
                 self.as_raw(),
-                optional_utf16(value),
+                optional_utf16(value.as_deref()),
             ))
         }
     }
@@ -321,11 +327,12 @@ impl ComPtr<IAvnFilePickerOptions> {
     }
 
     pub fn set_default_extension(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
             let vtbl = (*self.as_raw()).vtbl.as_ref().unwrap();
             hresult::check((vtbl.set_default_extension)(
                 self.as_raw(),
-                optional_utf16(value),
+                optional_utf16(value.as_deref()),
             ))
         }
     }
@@ -339,15 +346,18 @@ impl ComPtr<IAvnFilePickerOptions> {
     }
 
     pub fn add_file_type(&self, name: Option<&[u16]>) -> Result<i32> {
+        let name = name.map(crate::terminated_utf16);
         unsafe {
             let vtbl = (*self.as_raw()).vtbl.as_ref().unwrap();
             let mut index = 0;
-            let hr = (vtbl.add_file_type)(self.as_raw(), optional_utf16(name), &mut index);
+            let hr =
+                (vtbl.add_file_type)(self.as_raw(), optional_utf16(name.as_deref()), &mut index);
             hresult::check(hr).map(|_| index)
         }
     }
 
     pub fn add_file_type_pattern(&self, index: i32, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let vtbl = (*self.as_raw()).vtbl.as_ref().unwrap();
             hresult::check((vtbl.add_file_type_pattern)(
@@ -359,6 +369,7 @@ impl ComPtr<IAvnFilePickerOptions> {
     }
 
     pub fn add_file_type_mime_type(&self, index: i32, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let vtbl = (*self.as_raw()).vtbl.as_ref().unwrap();
             hresult::check((vtbl.add_file_type_mime_type)(
@@ -374,6 +385,7 @@ impl ComPtr<IAvnFilePickerOptions> {
         index: i32,
         value: &[u16],
     ) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             let vtbl = (*self.as_raw()).vtbl.as_ref().unwrap();
             hresult::check((vtbl.add_file_type_apple_uniform_type_identifier)(
@@ -822,13 +834,14 @@ impl ComPtr<IAvnApplication3> {
     }
 
     pub fn add_startup_argument(&self, value: Option<&[u16]>) -> Result<()> {
+        let value = value.map(crate::terminated_utf16);
         unsafe {
             hresult::check(((*self.as_raw())
                 .vtbl
                 .as_ref()
                 .unwrap()
                 .add_startup_argument)(
-                self.as_raw(), optional_utf16(value)
+                self.as_raw(), optional_utf16(value.as_deref())
             ))
         }
     }

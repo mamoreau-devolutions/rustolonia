@@ -135,12 +135,12 @@ public sealed class RustRangeCoordinator
         hr = batch.GetItemCount(out var count);
         if (hr < 0)
         {
-            window.AbandonPage(offset);
+            window.AbandonPage(generation, offset);
             return (RustVmBatchOutcome.Error, hr);
         }
         if (count < 0 || totalCount < 0 || offset < 0)
         {
-            window.AbandonPage(offset);
+            window.AbandonPage(generation, offset);
             return (RustVmBatchOutcome.Error, InvalidArgument);
         }
 
@@ -162,7 +162,7 @@ public sealed class RustRangeCoordinator
         {
             // A producer newer than this host: reject the batch, but leave the
             // page requestable rather than blank forever.
-            window.AbandonPage(offset);
+            window.AbandonPage(generation, offset);
             return (RustVmBatchOutcome.Error, InvalidArgument);
         }
 
@@ -170,7 +170,7 @@ public sealed class RustRangeCoordinator
         // allocate managed presentation objects at all.
         if (generation != window.Generation)
         {
-            window.AbandonPage(offset);
+            window.AbandonPage(generation, offset);
             return (RustVmBatchOutcome.Stale, 0);
         }
 
@@ -181,7 +181,7 @@ public sealed class RustRangeCoordinator
             if (hr < 0)
             {
                 DisposeStaged(staged);
-                window.AbandonPage(offset);
+                window.AbandonPage(generation, offset);
                 return (RustVmBatchOutcome.Error, hr);
             }
             string? text = null;
@@ -191,7 +191,7 @@ public sealed class RustRangeCoordinator
                 if (hr < 0)
                 {
                     DisposeStaged(staged);
-                    window.AbandonPage(offset);
+                    window.AbandonPage(generation, offset);
                     return (RustVmBatchOutcome.Error, hr);
                 }
             }
@@ -205,7 +205,7 @@ public sealed class RustRangeCoordinator
                 // here rather than leaving it to finalization.
                 (model as IDisposable)?.Dispose();
                 DisposeStaged(staged);
-                window.AbandonPage(offset);
+                window.AbandonPage(generation, offset);
                 throw;
             }
         }

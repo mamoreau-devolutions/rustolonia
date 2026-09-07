@@ -5,9 +5,35 @@ use crate::generated::IAvnWindow;
 use crate::guid::Guid;
 use crate::hresult::{self, Result};
 use crate::rust_vm::IAvnRustViewModel;
+use crate::terminated_utf16;
 use crate::value_converter::IAvnRustValueConverterProvider;
 use std::ffi::c_void;
 use std::ptr;
+
+#[cfg(test)]
+mod string_tests {
+    use super::*;
+    use std::borrow::Cow;
+
+    #[test]
+    fn empty_and_unterminated_application_arguments_are_terminated() {
+        for value in [&[][..], &[65, 66][..], &[0xd800][..]] {
+            let buffer = terminated_utf16(value);
+            assert_eq!(&buffer[..value.len()], value);
+            assert_eq!(buffer.last(), Some(&0));
+            assert_eq!(buffer.len(), value.len() + 1);
+        }
+    }
+
+    #[test]
+    fn terminated_arguments_preserve_existing_nul_semantics_without_allocation() {
+        for value in [&[0][..], &[65, 0][..], &[65, 0, 66][..]] {
+            let buffer = terminated_utf16(value);
+            assert!(matches!(buffer, Cow::Borrowed(_)));
+            assert_eq!(buffer.as_ptr(), value.as_ptr());
+        }
+    }
+}
 
 const IAVN_APPLICATION2_IID: Guid = Guid {
     data1: 0x6B2E8F10,
@@ -234,6 +260,7 @@ impl ComPtr<IAvnApplication> {
         key: &[u16],
         theme_variant: i32,
     ) -> Result<Option<ComPtr<IAvnResourceValue>>> {
+        let key = terminated_utf16(key);
         unsafe {
             let mut found = 0;
             let mut value = ptr::null_mut();
@@ -278,6 +305,7 @@ impl ComPtr<IAvnApplication> {
         text: &[u16],
         completion: &ComPtr<IAvnAsyncCompletion>,
     ) -> Result<i64> {
+        let text = terminated_utf16(text);
         unsafe {
             let mut operation_id = 0;
             let hr = ((*self.as_raw())
