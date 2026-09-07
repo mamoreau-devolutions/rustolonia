@@ -26,18 +26,18 @@ var csharpDirectory = Path.GetFullPath(args[1]);
 var expectedFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
 foreach (var (name, source) in ComSourceEmitter.Emit(ir))
-    expectedFiles[Path.Combine(csharpDirectory, name)] = source.Replace(Environment.NewLine, "\n");
+    OwnedOutputs.Add(expectedFiles, Path.Combine(csharpDirectory, name), source.Replace(Environment.NewLine, "\n"));
 
 var reportPath = Path.ChangeExtension(irPath, ".gaps.txt");
 var reportText = string.Join("\n", ir.Skipped.Select(s => $"{s.Owner}.{s.Member}: {s.Reason}")) + "\n";
 
-expectedFiles[irPath] = ir.ToJson().Replace(Environment.NewLine, "\n") + "\n";
-expectedFiles[reportPath] = reportText;
+OwnedOutputs.Add(expectedFiles, irPath, ir.ToJson().Replace(Environment.NewLine, "\n") + "\n");
+OwnedOutputs.Add(expectedFiles, reportPath, reportText);
 
 if (args.Length == 3)
 {
     var headerPath = Path.GetFullPath(args[2]);
-    expectedFiles[headerPath] = NativeHeaderEmitter.Emit(ir).Replace(Environment.NewLine, "\n");
+    OwnedOutputs.Add(expectedFiles, headerPath, NativeHeaderEmitter.Emit(ir).Replace(Environment.NewLine, "\n"));
 }
 
 if (checkMode)

@@ -175,6 +175,93 @@ public class OwnedOutputWriterTests
     }
 
     [Fact]
+    public void Assembling_outputs_rejects_physical_path_collisions()
+    {
+        using var scratch = new Scratch();
+        var files = new Dictionary<string, string>(StringComparer.Ordinal);
+        var first = Path.Combine(scratch.Root, "owned.g.cs");
+        OwnedOutputs.Add(files, first, "one\n");
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            OwnedOutputs.Add(files, Path.Combine(scratch.Root, "OWNED.g.cs"), "two\n"));
+        Assert.Contains("Duplicate generated output", error.Message, StringComparison.Ordinal);
+        Assert.Equal("one\n", files[first]);
+    }
+
+    [Fact]
+    public void Write_refuses_to_overwrite_another_generators_owned_file()
+    {
+        using var scratch = new Scratch();
+        var shared = Path.Combine(scratch.Root, "shared.g.cs");
+        OwnedOutputs.Write(OwnedOutputs.ProjectionGeneratorId, new Dictionary<string, string>
+        {
+            [shared] = "projection\n",
+        });
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            OwnedOutputs.Write(OwnedOutputs.ViewModelGeneratorId, new Dictionary<string, string>
+            {
+                [shared] = "viewmodel\n",
+            }));
+        Assert.Contains("owned by avalonia-projection", error.Message, StringComparison.Ordinal);
+        Assert.Equal("projection\n", File.ReadAllText(shared).Replace("\r\n", "\n"));
+    }
+
+    [Fact]
+    public void Write_does_not_delete_a_file_still_owned_by_another_generator()
+    {
+        using var scratch = new Scratch();
+        var shared = Path.Combine(scratch.Root, "shared.g.cs");
+        var extra = Path.Combine(scratch.Root, "extra.g.cs");
+        OwnedOutputs.Write(OwnedOutputs.ProjectionGeneratorId, new Dictionary<string, string>
+        {
+            [shared] = "same\n",
+        });
+        File.WriteAllText(
+            Path.Combine(scratch.Root, OwnedOutputs.ManifestFileName(OwnedOutputs.ViewModelGeneratorId)),
+            $$"""
+            {
+              "generator": "avalonia-viewmodel",
+              "files": [
+                { "path": "shared.g.cs", "sha256": "{{OwnedOutputs.HashContent("same\n")}}" },
+                { "path": "extra.g.cs", "sha256": "{{OwnedOutputs.HashContent("extra\n")}}" }
+              ]
+            }
+            """ + "\n");
+        File.WriteAllText(extra, "extra\n");
+
+        OwnedOutputs.Write(OwnedOutputs.ViewModelGeneratorId, new Dictionary<string, string>
+        {
+            [extra] = "extra\n",
+        });
+
+        Assert.True(File.Exists(shared));
+        Assert.Equal("same\n", File.ReadAllText(shared).Replace("\r\n", "\n"));
+        Assert.True(File.Exists(extra));
+    }
+
+    [Theory]
+    [InlineData("""{ "generator": "avalonia-viewmodel", "files": null }""", "null files list")]
+    [InlineData("""{ "generator": "avalonia-viewmodel", "files": [null] }""", "null files[")]
+    [InlineData("""{ "generator": "avalonia-viewmodel", "files": [{ "path": "a.g.cs", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }, { "path": "a.g.cs", "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" }] }""", "duplicate file name")]
+    [InlineData("""{ "generator": "avalonia-viewmodel", "files": [{ "path": "a.g.cs", "sha256": "not-a-hash" }] }""", "invalid hash")]
+    [InlineData("""{ "generator": "Not Safe", "files": [] }""", "unsafe generator")]
+    [InlineData("""{ "generator": "avalonia-viewmodel", "files": [{ "path": "nested/a.g.cs", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }] }""", "unsafe path")]
+    public void Corrupted_ownership_manifests_fail_closed(string manifest, string expected)
+    {
+        using var scratch = new Scratch();
+        var owned = Path.Combine(scratch.Root, "owned.g.cs");
+        File.WriteAllText(owned, "original\n");
+        File.WriteAllText(Path.Combine(scratch.Root, OwnedOutputs.ManifestFileName(OwnedOutputs.ViewModelGeneratorId)), manifest);
+        var before = File.ReadAllBytes(owned);
+
+        var error = Assert.Throws<InvalidOperationException>(() => OwnedOutputs.Write(
+            OwnedOutputs.ViewModelGeneratorId,
+            new Dictionary<string, string> { [owned] = "updated\n" }));
+        Assert.Contains(expected, error.Message, StringComparison.Ordinal);
+        Assert.Equal(before, File.ReadAllBytes(owned));
+    }
+
+    [Fact]
     public void Bootstrap_does_not_claim_unrelated_gcs_files()
     {
         using var scratch = new Scratch();

@@ -1,0 +1,9 @@
+{
+  "generator": "avalonia-bindgen",
+  "files": [
+    {
+      "path": "generated.rs",
+      "sha256": "f92d5844482bf6c30c7946b821fc24dda0f958de8cc4f11e9435260999eb3228"
+    }
+  ]
+}

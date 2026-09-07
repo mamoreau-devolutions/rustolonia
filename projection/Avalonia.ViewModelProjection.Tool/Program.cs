@@ -47,10 +47,10 @@ foreach (var (name, source) in ViewModelSourceEmitter.EmitCSharp(ir))
     var directory = name == "RustViewRegistry.g.cs"
         ? registryDirectory
         : adapterDirectory;
-    expectedFiles[Path.Combine(directory, name)] = source.Replace(Environment.NewLine, "\n");
+    OwnedOutputs.Add(expectedFiles, Path.Combine(directory, name), source.Replace(Environment.NewLine, "\n"));
 }
-expectedFiles[rustPath] = ViewModelSourceEmitter.EmitRust(ir, externalRust).Replace(Environment.NewLine, "\n");
-expectedFiles[contractPath] = ViewModelSourceEmitter.EmitContract(ir).Replace(Environment.NewLine, "\n");
+OwnedOutputs.Add(expectedFiles, rustPath, ViewModelSourceEmitter.EmitRust(ir, externalRust).Replace(Environment.NewLine, "\n"));
+OwnedOutputs.Add(expectedFiles, contractPath, ViewModelSourceEmitter.EmitContract(ir).Replace(Environment.NewLine, "\n"));
 
 if (checkMode)
 {

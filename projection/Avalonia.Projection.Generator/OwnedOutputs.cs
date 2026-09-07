@@ -25,12 +25,32 @@ public static class OwnedOutputs
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    public static string ManifestFileName(string generatorId) => $".{generatorId}.owned.json";
+    public static string ManifestFileName(string generatorId)
+    {
+        if (!IsSafeGeneratorId(generatorId))
+            throw new InvalidOperationException($"Unsafe generator id '{generatorId}'.");
+        return $".{generatorId}.owned.json";
+    }
 
     public static string HashContent(string content)
     {
         var bytes = Encoding.UTF8.GetBytes(content);
         return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+    }
+
+    public static bool IsSafeGeneratorId(string generatorId) =>
+        !string.IsNullOrWhiteSpace(generatorId)
+        && generatorId.Length <= 64
+        && generatorId.All(character => character is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '-')
+        && generatorId[0] is >= 'a' and <= 'z';
+
+    public static bool IsSafeLeafFileName(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
+        if (path.Contains('/') || path.Contains('\\') || path.Contains(':'))
+            return false;
+        return IsSafeRelativePath(path) && Path.GetFileName(path) == path;
     }
 
     public static bool IsSafeRelativePath(string path)
@@ -46,6 +66,22 @@ public static class OwnedOutputs
 
         var parts = normalized.Split('/', StringSplitOptions.None);
         return parts.Length > 0 && parts.All(part => part is not "" and not "." and not "..");
+    }
+
+    public static void Add(IDictionary<string, string> files, string path, string content)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        var full = Path.GetFullPath(path);
+        foreach (var existing in files.Keys)
+        {
+            if (string.Equals(Path.GetFullPath(existing), full, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"Duplicate generated output '{full}' collides with '{Path.GetFullPath(existing)}'.");
+            }
+        }
+
+        files.Add(path, content);
     }
 
     public static OwnedOutputCheckResult Check(
@@ -78,7 +114,7 @@ public static class OwnedOutputs
                 continue;
 
             var expectedNames = ExpectedRelativeNames(directory, files);
-            foreach (var owned in manifest.Files)
+            foreach (var owned in manifest.Files!)
             {
                 ValidateManifestEntry(directory, owned);
                 if (expectedNames.Contains(owned.Path))
@@ -106,7 +142,19 @@ public static class OwnedOutputs
     {
         ValidateDestinations(generatorId, files);
         var groups = GroupByDirectory(files);
-        var obsolete = new List<(string Path, string Hash)>();
+        var obsolete = new List<string>();
+
+        foreach (var (path, _) in files)
+        {
+            var directory = Path.GetDirectoryName(Path.GetFullPath(path))!;
+            var leaf = Path.GetFileName(path);
+            var other = OtherOwners(directory, leaf, generatorId);
+            if (other.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    $"Refusing to overwrite '{leaf}' owned by {string.Join(", ", other)}.");
+            }
+        }
 
         foreach (var (directory, _) in groups)
         {
@@ -115,7 +163,7 @@ public static class OwnedOutputs
             if (manifest is null)
                 continue;
 
-            foreach (var owned in manifest.Files)
+            foreach (var owned in manifest.Files!)
             {
                 ValidateManifestEntry(directory, owned);
                 if (expectedNames.Contains(owned.Path))
@@ -125,6 +173,9 @@ public static class OwnedOutputs
                 if (!File.Exists(fullPath))
                     continue;
 
+                if (OtherOwners(directory, owned.Path, generatorId).Count > 0)
+                    continue;
+
                 var onDisk = HashBytes(File.ReadAllBytes(fullPath));
                 if (onDisk != owned.Sha256)
                 {
@@ -132,7 +183,7 @@ public static class OwnedOutputs
                         $"Refusing to delete '{owned.Path}' owned by {generatorId}: file was modified outside the generator.");
                 }
 
-                obsolete.Add((fullPath, owned.Sha256));
+                obsolete.Add(fullPath);
             }
         }
 
@@ -172,34 +223,48 @@ public static class OwnedOutputs
                 exception);
         }
 
-        foreach (var (path, _) in obsolete)
+        foreach (var path in obsolete)
             File.Delete(path);
 
-        foreach (var (directory, directoryFiles) in groups)
+        var manifestTemps = new List<(string Destination, string Temp)>();
+        try
         {
-            Directory.CreateDirectory(directory);
-            var manifest = new OwnedOutputManifest
+            foreach (var (directory, directoryFiles) in groups)
             {
-                Generator = generatorId,
-                Files = directoryFiles
-                    .Select(entry => new OwnedOutputFile
-                    {
-                        Path = Path.GetFileName(entry.Key),
-                        Sha256 = HashContent(entry.Value),
-                    })
-                    .OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase)
-                    .ToList(),
-            };
-            var manifestPath = Path.Combine(directory, ManifestFileName(generatorId));
-            var json = JsonSerializer.Serialize(manifest, JsonOptions).Replace("\r\n", "\n", StringComparison.Ordinal) + "\n";
-            File.WriteAllText(manifestPath, json, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                Directory.CreateDirectory(directory);
+                var manifest = new OwnedOutputManifest
+                {
+                    Generator = generatorId,
+                    Files = directoryFiles
+                        .Select(entry => new OwnedOutputFile
+                        {
+                            Path = Path.GetFileName(entry.Key),
+                            Sha256 = HashContent(entry.Value),
+                        })
+                        .OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase)
+                        .ToList(),
+                };
+                var json = JsonSerializer.Serialize(manifest, JsonOptions).Replace("\r\n", "\n", StringComparison.Ordinal) + "\n";
+                var destination = Path.Combine(directory, ManifestFileName(generatorId));
+                var temp = destination + $".owned-tmp-{Guid.NewGuid():N}";
+                File.WriteAllText(temp, json, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                manifestTemps.Add((destination, temp));
+            }
+
+            foreach (var (destination, temp) in manifestTemps)
+                File.Move(temp, destination, overwrite: true);
+        }
+        catch
+        {
+            DeleteTemps(manifestTemps);
+            throw;
         }
     }
 
     private static void ValidateDestinations(string generatorId, IReadOnlyDictionary<string, string> files)
     {
-        if (string.IsNullOrWhiteSpace(generatorId))
-            throw new InvalidOperationException("Generator id must not be empty.");
+        if (!IsSafeGeneratorId(generatorId))
+            throw new InvalidOperationException($"Unsafe generator id '{generatorId}'.");
         if (files.Count == 0)
             throw new InvalidOperationException("Generation produced no outputs.");
 
@@ -212,7 +277,7 @@ public static class OwnedOutputs
             if (!seen.Add(full))
                 throw new InvalidOperationException($"Duplicate generated output '{full}'.");
             var relative = Path.GetFileName(full);
-            if (!IsSafeRelativePath(relative))
+            if (!IsSafeLeafFileName(relative))
                 throw new InvalidOperationException($"Generated output '{path}' is not a safe file name.");
             if (string.Equals(relative, ManifestFileName(generatorId), StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException($"Generator '{generatorId}' cannot emit its ownership manifest as content.");
@@ -261,35 +326,77 @@ public static class OwnedOutputs
 
         var parsed = JsonSerializer.Deserialize<OwnedOutputManifest>(File.ReadAllText(path), JsonOptions)
             ?? throw new InvalidOperationException($"Ownership manifest '{path}' deserialized to null.");
+        ValidateManifest(directory, generatorId, parsed);
+        return parsed;
+    }
+
+    private static void ValidateManifest(string directory, string generatorId, OwnedOutputManifest parsed)
+    {
+        if (!IsSafeGeneratorId(parsed.Generator))
+            throw new InvalidOperationException($"Ownership manifest in '{directory}' has an unsafe generator id '{parsed.Generator}'.");
         if (!string.Equals(parsed.Generator, generatorId, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                $"Ownership manifest '{path}' belongs to '{parsed.Generator}', not '{generatorId}'.");
+                $"Ownership manifest in '{directory}' belongs to '{parsed.Generator}', not '{generatorId}'.");
         }
 
-        parsed.Files ??= [];
-        foreach (var owned in parsed.Files)
+        if (parsed.Files is null)
+            throw new InvalidOperationException($"Ownership manifest in '{directory}' has a null files list.");
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var index = 0; index < parsed.Files.Count; index++)
+        {
+            var owned = parsed.Files[index]
+                ?? throw new InvalidOperationException($"Ownership manifest in '{directory}' contains a null files[{index}] element.");
             ValidateManifestEntry(directory, owned);
-        return parsed;
+            if (!seen.Add(owned.Path))
+            {
+                throw new InvalidOperationException(
+                    $"Ownership manifest in '{directory}' contains a duplicate file name '{owned.Path}'.");
+            }
+        }
     }
 
     private static void ValidateManifestEntry(string directory, OwnedOutputFile owned)
     {
-        if (!IsSafeRelativePath(owned.Path))
+        if (!IsSafeLeafFileName(owned.Path))
         {
             throw new InvalidOperationException(
                 $"Ownership manifest in '{directory}' contains an unsafe path '{owned.Path}'.");
         }
 
-        var combined = Path.GetFullPath(Path.Combine(directory, owned.Path));
-        var root = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-                   + Path.DirectorySeparatorChar;
-        if (!combined.StartsWith(root, StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(Path.GetDirectoryName(combined), Path.GetFullPath(directory), StringComparison.OrdinalIgnoreCase))
+        if (owned.Sha256 is null || !IsSha256(owned.Sha256))
         {
             throw new InvalidOperationException(
-                $"Ownership manifest in '{directory}' contains a path that escapes the output root: '{owned.Path}'.");
+                $"Ownership manifest in '{directory}' contains an invalid hash for '{owned.Path}'.");
         }
+    }
+
+    private static bool IsSha256(string value) =>
+        value.Length == 64 && value.All(character => character is (>= '0' and <= '9') or (>= 'a' and <= 'f'));
+
+    private static IReadOnlyList<string> OtherOwners(string directory, string leaf, string exceptGenerator)
+    {
+        if (!Directory.Exists(directory))
+            return [];
+
+        var owners = new List<string>();
+        foreach (var path in Directory.EnumerateFiles(directory, ".*.owned.json"))
+        {
+            var fileName = Path.GetFileName(path);
+            if (!fileName.StartsWith('.') || !fileName.EndsWith(".owned.json", StringComparison.Ordinal))
+                continue;
+            var candidateId = fileName[1..^".owned.json".Length];
+            if (!IsSafeGeneratorId(candidateId) || string.Equals(candidateId, exceptGenerator, StringComparison.Ordinal))
+                continue;
+
+            var manifest = ReadManifest(directory, candidateId);
+            if (manifest?.Files is { } owned
+                && owned.Any(file => string.Equals(file.Path, leaf, StringComparison.OrdinalIgnoreCase)))
+                owners.Add(candidateId);
+        }
+
+        return owners;
     }
 
     private static string HashBytes(byte[] bytes) =>
@@ -307,7 +414,7 @@ public static class OwnedOutputs
     private sealed class OwnedOutputManifest
     {
         public string Generator { get; set; } = "";
-        public List<OwnedOutputFile> Files { get; set; } = [];
+        public List<OwnedOutputFile>? Files { get; set; }
     }
 
     private sealed class OwnedOutputFile

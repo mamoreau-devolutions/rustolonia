@@ -1,0 +1,9 @@
+{
+  "generator": "avalonia-viewmodel",
+  "files": [
+    {
+      "path": "RustViewRegistry.g.cs",
+      "sha256": "10fc1b676cbb85e76bdf0ac16bf05fa24083e606b455b367751c3b7bd112e2b9"
+    }
+  ]
+}
