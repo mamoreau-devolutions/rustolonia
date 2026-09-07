@@ -61,6 +61,8 @@ function Test-NativeConsumer {
     $executable = Join-Path $bundle "smoke_app$($target.ExeExtension)"
     Assert-True (Test-Path -LiteralPath $executable -PathType Leaf) "Packaged executable is missing: $executable"
     Assert-True (Test-Path -LiteralPath (Join-Path $bundle "Avalonia.Host$($target.HostExtension)") -PathType Leaf) 'Packaged host is missing.'
+    $inventory = Get-Content -LiteralPath (Join-Path $bundle 'sbom.cdx.json') -Raw | ConvertFrom-Json
+    Assert-True (@($inventory.components | Where-Object { $_.type -eq 'library' -and $_.purl -like 'pkg:nuget/*' }).Count -gt 0) 'Packaged inventory must contain the published host dependencies.'
     foreach ($line in Get-Content -LiteralPath (Join-Path $bundle 'checksums.sha256')) {
         $expected, $file = $line -split '\s+\*', 2
         $actual = (Get-FileHash -LiteralPath (Join-Path $bundle $file) -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -106,6 +108,30 @@ try {
     $publishCommand = New-DotnetPublishCommand -Project 'host project.csproj' -Configuration Release -Rid win-x64 -ArtifactsPath 'artifacts path' -AdditionalProperties $publishProperties
     Assert-True ($publishCommand[0] -eq 'dotnet' -and $publishCommand[2] -eq 'host project.csproj') 'Publish argv must preserve command and spaced paths.'
     Assert-True ($publishCommand[-1] -eq $publishProperties[-1]) 'Publish argv must include the final override.'
+    & {
+        $assetsDirectory = Join-Path $scratch 'custom artifacts' 'obj' 'Avalonia.Host'
+        New-Item -ItemType Directory -Force -Path $assetsDirectory | Out-Null
+        $assetsFile = Join-Path $assetsDirectory 'project.assets.json'
+        Set-Content -LiteralPath $assetsFile -Value '{"libraries":{}}'
+        function dotnet {
+            Assert-True ($args[0] -eq 'msbuild' -and $args -contains '-getProperty:ProjectAssetsFile') 'Restore metadata must be queried from MSBuild.'
+            Assert-True ($args -contains '-p:Configuration=Release' -and $args -contains '-p:RuntimeIdentifier=win-x64') 'Metadata evaluation must match publish configuration and RID.'
+            Assert-True ($args -contains '-p:AvaloniaProducerRoot=producer path' -and $args -contains '-p:RustoloniaRoot=rustolonia path') 'Metadata evaluation must preserve publish overrides.'
+            Assert-True (($args -contains "-p:ArtifactsPath=$(Resolve-CallerRelativePath -PathValue 'artifacts path')") -eq $expectArtifacts) 'Metadata evaluation must preserve the optional artifacts path.'
+            $global:LASTEXITCODE = 0
+            $assetsFile
+        }
+        $expectArtifacts = $true
+        $resolvedAssets = Get-PublishedProjectAssetsFile -Project 'host project.csproj' -Configuration Release -Rid win-x64 -ArtifactsPath 'artifacts path' -AdditionalProperties $publishProperties
+        Assert-True ($resolvedAssets -eq $assetsFile) 'Metadata must come from the evaluated path, not host/obj.'
+        $expectArtifacts = $false
+        $resolvedAssets = Get-PublishedProjectAssetsFile -Project 'host project.csproj' -Configuration Release -Rid win-x64 -AdditionalProperties $publishProperties
+        Assert-True ($resolvedAssets -eq $assetsFile) 'Consumer publication must also query its restore metadata.'
+        $assetsFile = Join-Path $scratch 'missing.assets.json'
+        Assert-Throws { Get-PublishedProjectAssetsFile -Project 'host project.csproj' -Configuration Release -Rid win-x64 -AdditionalProperties $publishProperties } 'metadata does not exist'
+        $assetsFile = ''
+        Assert-Throws { Get-PublishedProjectAssetsFile -Project 'host project.csproj' -Configuration Release -Rid win-x64 -AdditionalProperties $publishProperties } 'ProjectAssetsFile was empty'
+    }
     $cargoCommand = New-CargoBuildCommand -ManifestPath 'app path/Cargo.toml' -PackageName example_app -TargetTriple x86_64-pc-windows-msvc -Example hello_world
     Assert-True ($cargoCommand.Count -eq 11 -and $cargoCommand[0] -eq 'cargo' -and $cargoCommand[3] -eq 'app path/Cargo.toml') 'Cargo argv must be flat and preserve spaced paths.'
 
@@ -222,6 +248,36 @@ Add-Content -LiteralPath (Join-Path $PSScriptRoot 'signatures.log') -Value $Arti
     $badManifestPath = Join-Path $consumer 'bad.json'
     $badManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $badManifestPath
     Assert-Throws { & (Join-Path $root 'rust' 'build-app.ps1') -ProducerRoot $fakeProducer -Manifest $badManifestPath } 'unknown field'
+    $invalidFields = @(
+        @{ Field = 'version'; Value = '1' },
+        @{ Field = 'version'; Value = '2026-01-01T00:00:00Z' },
+        @{ Field = 'version'; Value = $true },
+        @{ Field = 'version'; Value = 1.4 },
+        @{ Field = 'version'; Value = $null },
+        @{ Field = 'version'; Value = @(1) },
+        @{ Field = 'packageName'; Value = '' },
+        @{ Field = 'packageName'; Value = $null },
+        @{ Field = 'packageName'; Value = 123 },
+        @{ Field = 'binary'; Value = '' },
+        @{ Field = 'binary'; Value = $null },
+        @{ Field = 'binary'; Value = @('demo_app') },
+        @{ Field = 'rid'; Value = 'WIN-X64' },
+        @{ Field = 'rid'; Value = @('win-x64') },
+        @{ Field = 'configuration'; Value = 'release' },
+        @{ Field = 'configuration'; Value = @('Release') }
+    )
+    foreach ($field in @('presentationProject', 'viewModelIr', 'generatedAdaptersDirectory', 'generatedRegistryFile', 'generatedRustFile', 'generatedContractFile', 'cargoManifest', 'outputDirectory')) {
+        foreach ($value in @($null, '', 123, @('path'), @{ path = 'value' })) {
+            $invalidFields += @{ Field = $field; Value = $value }
+        }
+    }
+    foreach ($case in $invalidFields) {
+        $badManifest = Get-Content -LiteralPath (Join-Path $consumer 'avalonia-app.json') -Raw | ConvertFrom-Json -AsHashtable
+        $badManifest[$case.Field] = $case.Value
+        $badManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $badManifestPath
+        Assert-Throws { & (Join-Path $root 'rust' 'build-app.ps1') -ProducerRoot $fakeProducer -Manifest $badManifestPath } "Invalid consumer manifest: $($case.Field)"
+    }
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $consumer '.avalonia'))) 'Invalid manifests must not create build outputs.'
 
     $inventory = Join-Path $scratch 'inventory'
     New-Item -ItemType Directory -Path $inventory | Out-Null
@@ -261,6 +317,12 @@ version = "0.1.0"
     Assert-True (@($depsSbom.components | Where-Object { $_.type -eq 'library' -and $_.purl -eq 'pkg:cargo/third-party-crate@0.4.1' }).Count -eq 1) 'SBOM must include resolved Cargo dependencies.'
     Assert-True (@($depsSbom.components | Where-Object { $_.type -eq 'library' -and $_.name -eq 'avalonia' -and $_.version -eq '0.1.0' }).Count -eq 0) 'SBOM must not list workspace-local crates without a [source] as third-party dependencies.'
     Assert-True (@($depsSbom.metadata.properties | Where-Object { $_.name -eq 'avalonia:producer-pin' -and $_.value -eq 'deadbeef' }).Count -eq 1) 'SBOM must record the producer pin used to build the bundle.'
+    & (Join-Path $root 'rust' 'generate-sbom.ps1') -Rid win-x64 -Bundle $depsInventory -CargoLockPath (Join-Path $scratch 'missing.lock') -ProjectAssetsJsonPath (Join-Path $scratch 'missing.assets.json')
+    $missingSbom = Get-Content -LiteralPath (Join-Path $depsInventory 'sbom.cdx.json') -Raw | ConvertFrom-Json
+    foreach ($ecosystem in @('nuget', 'cargo')) {
+        $source = @($missingSbom.metadata.properties | Where-Object { $_.name -eq "avalonia:$ecosystem-dependency-source" })
+        Assert-True ($source.Count -eq 1 -and $source[0].value -like 'unavailable:*does not exist') 'Missing supplied dependency files must not be reported as available.'
+    }
 
     if ($RunNativeSmoke) { Test-NativeConsumer -Scratch $scratch }
 }

@@ -46,6 +46,18 @@ $fileComponents = @(
         }
 )
 
+function Get-DependencySourceDescription {
+    param([string]$Path, [string]$Description, [string]$FileName)
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return "unavailable: no $FileName path was supplied"
+    }
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return "unavailable: supplied $FileName file does not exist"
+    }
+    return $Description
+}
+
 function Get-NuGetPackageComponents {
     param([string]$Path)
 
@@ -131,8 +143,8 @@ $nugetComponents = @(Get-NuGetPackageComponents -Path $ProjectAssetsJsonPath)
 $cargoComponents = @(Get-CargoPackageComponents -Path $CargoLockPath | Where-Object { $null -ne $_ })
 
 $properties = @(
-    [ordered]@{ name = 'avalonia:nuget-dependency-source'; value = if ($ProjectAssetsJsonPath) { 'project.assets.json (offline restore metadata)' } else { 'unavailable: no project.assets.json path was supplied' } }
-    [ordered]@{ name = 'avalonia:cargo-dependency-source'; value = if ($CargoLockPath) { 'Cargo.lock (offline lockfile metadata)' } else { 'unavailable: no Cargo.lock path was supplied' } }
+    [ordered]@{ name = 'avalonia:nuget-dependency-source'; value = Get-DependencySourceDescription -Path $ProjectAssetsJsonPath -FileName 'project.assets.json' -Description 'project.assets.json (offline restore metadata)' }
+    [ordered]@{ name = 'avalonia:cargo-dependency-source'; value = Get-DependencySourceDescription -Path $CargoLockPath -FileName 'Cargo.lock' -Description 'Cargo.lock (offline lockfile metadata)' }
 )
 if ($ProducerPin) {
     $properties += [ordered]@{ name = 'avalonia:producer-pin'; value = $ProducerPin }

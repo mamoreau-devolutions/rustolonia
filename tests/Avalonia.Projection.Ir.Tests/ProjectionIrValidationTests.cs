@@ -43,9 +43,9 @@ public class ProjectionIrValidationTests
     }
 
     [Fact]
-    public void Void_return_kind_is_accepted()
+    public void Void_return_kind_is_rejected()
     {
-        new ProjectionIr
+        var error = Assert.Throws<InvalidOperationException>(() => new ProjectionIr
         {
             Types =
             [
@@ -54,7 +54,28 @@ public class ProjectionIrValidationTests
                     new ProjectedMethod { Name = "Noop", ReturnKind = MarshallingKind.Void },
                 ]),
             ],
-        }.Validate();
+        }.Validate());
+        Assert.Contains("Only PreserveSig I32 HRESULT", error.Message);
+    }
+
+    [Theory]
+    [InlineData(false, ParameterDirection.In)]
+    [InlineData(true, ParameterDirection.InOut)]
+    public void Unsupported_method_abi_is_rejected(bool preserveSig, ParameterDirection direction)
+    {
+        Assert.Throws<InvalidOperationException>(() => new ProjectionIr
+        {
+            Types = [Interface("IAvnBad", methods:
+            [
+                new ProjectedMethod
+                {
+                    Name = "Bad",
+                    ReturnKind = MarshallingKind.I32,
+                    PreserveSig = preserveSig,
+                    Parameters = [new() { Name = "value", Kind = MarshallingKind.I32, Direction = direction }],
+                },
+            ])],
+        }.Validate());
     }
 
     [Fact]

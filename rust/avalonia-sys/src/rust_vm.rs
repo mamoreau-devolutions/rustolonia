@@ -142,6 +142,7 @@ unsafe impl ComInterface for IAvnRustVmSink {
 
 impl ComPtr<IAvnRustVmSink> {
     pub fn set_string(&self, property_id: i32, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             hresult::check(((*self.as_raw()).vtbl.as_ref().unwrap().set_string)(
                 self.as_raw(),
@@ -182,6 +183,7 @@ impl ComPtr<IAvnRustVmSink> {
     }
 
     pub fn add_string(&self, collection_id: i32, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             hresult::check(((*self.as_raw()).vtbl.as_ref().unwrap().add_string)(
                 self.as_raw(),
@@ -400,22 +402,23 @@ pub enum MapKey {
 }
 
 impl MapKey {
-    fn parts(&self) -> (*const u16, i64) {
+    fn parts(&self) -> (Option<std::borrow::Cow<'_, [u16]>>, i64) {
         match self {
-            Self::Text(value) => (value.as_ptr(), 0),
-            Self::Integer(value) => (ptr::null(), *value),
+            Self::Text(value) => (Some(crate::terminated_utf16(value)), 0),
+            Self::Integer(value) => (None, *value),
         }
     }
 }
 
 impl ComPtr<IAvnRustVmSink4> {
     pub fn map_set_string(&self, map_id: i32, key: &MapKey, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         let (text, integer) = key.parts();
         unsafe {
             hresult::check(((*self.as_raw()).vtbl.as_ref().unwrap().map_set_string)(
                 self.as_raw(),
                 map_id,
-                text,
+                text.as_deref().map_or(ptr::null(), <[u16]>::as_ptr),
                 integer,
                 value.as_ptr(),
             ))
@@ -428,7 +431,7 @@ impl ComPtr<IAvnRustVmSink4> {
             hresult::check(((*self.as_raw()).vtbl.as_ref().unwrap().map_set_integer)(
                 self.as_raw(),
                 map_id,
-                text,
+                text.as_deref().map_or(ptr::null(), <[u16]>::as_ptr),
                 integer,
                 value,
             ))
@@ -441,7 +444,7 @@ impl ComPtr<IAvnRustVmSink4> {
             hresult::check(((*self.as_raw()).vtbl.as_ref().unwrap().map_set_boolean)(
                 self.as_raw(),
                 map_id,
-                text,
+                text.as_deref().map_or(ptr::null(), <[u16]>::as_ptr),
                 integer,
                 i32::from(value),
             ))
@@ -454,7 +457,7 @@ impl ComPtr<IAvnRustVmSink4> {
             hresult::check(((*self.as_raw()).vtbl.as_ref().unwrap().map_set_double)(
                 self.as_raw(),
                 map_id,
-                text,
+                text.as_deref().map_or(ptr::null(), <[u16]>::as_ptr),
                 integer,
                 value,
             ))
@@ -472,7 +475,7 @@ impl ComPtr<IAvnRustVmSink4> {
             hresult::check(((*self.as_raw()).vtbl.as_ref().unwrap().map_set_model)(
                 self.as_raw(),
                 map_id,
-                text,
+                text.as_deref().map_or(ptr::null(), <[u16]>::as_ptr),
                 integer,
                 value.as_raw(),
             ))
@@ -485,7 +488,7 @@ impl ComPtr<IAvnRustVmSink4> {
             hresult::check(((*self.as_raw()).vtbl.as_ref().unwrap().map_remove)(
                 self.as_raw(),
                 map_id,
-                text,
+                text.as_deref().map_or(ptr::null(), <[u16]>::as_ptr),
                 integer,
             ))
         }
@@ -506,6 +509,7 @@ impl ComPtr<IAvnRustVmSink4> {
         value: Option<f64>,
         message: Option<&[u16]>,
     ) -> Result<()> {
+        let message = message.map(crate::terminated_utf16);
         unsafe {
             hresult::check(((*self.as_raw())
                 .vtbl
@@ -516,7 +520,7 @@ impl ComPtr<IAvnRustVmSink4> {
                 command_id,
                 i32::from(value.is_some()),
                 value.unwrap_or(0.0),
-                message.map_or(ptr::null(), <[u16]>::as_ptr),
+                message.as_deref().map_or(ptr::null(), <[u16]>::as_ptr),
             ))
         }
     }
@@ -696,6 +700,7 @@ impl ComPtr<IAvnRustVmSink2> {
     }
 
     pub fn insert_string(&self, collection_id: i32, index: i32, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             hresult::check(((*self.as_raw()).vtbl.as_ref().unwrap().insert_string)(
                 self.as_raw(),
@@ -723,6 +728,7 @@ impl ComPtr<IAvnRustVmSink2> {
     }
 
     pub fn replace_string(&self, collection_id: i32, index: i32, value: &[u16]) -> Result<()> {
+        let value = crate::terminated_utf16(value);
         unsafe {
             hresult::check(((*self.as_raw()).vtbl.as_ref().unwrap().replace_string)(
                 self.as_raw(),
@@ -792,8 +798,9 @@ impl ComPtr<IAvnRustVmSink2> {
     }
 
     pub fn set_property_error(&self, property_id: i32, message: Option<&[u16]>) -> Result<()> {
+        let message = message.map(crate::terminated_utf16);
         unsafe {
-            let raw = message.map_or(ptr::null(), <[u16]>::as_ptr);
+            let raw = message.as_deref().map_or(ptr::null(), <[u16]>::as_ptr);
             hresult::check(
                 ((*self.as_raw()).vtbl.as_ref().unwrap().set_property_error)(
                     self.as_raw(),
@@ -947,6 +954,7 @@ unsafe impl ComInterface for IAvnRustViewModel2 {
 impl ComPtr<IAvnRustViewModel2> {
     /// Starts a tracked async invocation and returns its never-reused handle.
     pub fn begin_async_tracked(&self, command_id: i32, parameter: Option<&[u16]>) -> Result<i64> {
+        let parameter = parameter.map(crate::terminated_utf16);
         unsafe {
             let mut operation_id = 0i64;
             hresult::check(((*self.as_raw())
@@ -956,7 +964,7 @@ impl ComPtr<IAvnRustViewModel2> {
                 .begin_async_tracked)(
                 self.as_raw(),
                 command_id,
-                parameter.map_or(ptr::null(), <[u16]>::as_ptr),
+                parameter.as_deref().map_or(ptr::null(), <[u16]>::as_ptr),
                 &mut operation_id,
             ))?;
             Ok(operation_id)
@@ -2239,6 +2247,21 @@ unsafe extern "system" fn range_complete(
 mod tests {
     use super::*;
     use std::sync::atomic::AtomicI32;
+
+    #[test]
+    fn public_map_keys_are_normalized_before_pointer_extraction() {
+        for value in [vec![], vec![65], vec![65, 0, 66]] {
+            let key = MapKey::Text(value.clone());
+            let (text, integer) = key.parts();
+            let text = text.unwrap();
+            assert!(text.contains(&0));
+            assert_eq!(&text[..value.len()], &value);
+            assert_eq!(integer, 0);
+        }
+        let (text, integer) = MapKey::Integer(42).parts();
+        assert!(text.is_none());
+        assert_eq!(integer, 42);
+    }
 
     fn callbacks() -> RustViewModelCallbacks {
         RustViewModelCallbacks {

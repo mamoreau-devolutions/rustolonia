@@ -359,7 +359,7 @@ public class RustDataShapeTests
         window.ResetTo(2, 16);
         var coordinator = new RustRangeCoordinator(id => id == 5 ? window : null, pending.Add);
 
-        // A stale answer must not strand the page: the next index read asks again.
+        // An old answer must not remove the current generation's pending request.
         Assert.Null(window[0]);
         Assert.Single(source.Requests);
         Assert.Null(window[0]);
@@ -370,6 +370,13 @@ public class RustDataShapeTests
         pending[0]();
         Assert.Equal(RustVmBatchOutcome.Stale, stale.Outcome);
 
+        Assert.Null(window[0]);
+        Assert.Single(source.Requests);
+        Assert.False(window.ApplyRange(1, 16, 0, Array.Empty<object?>()));
+        Assert.Null(window[0]);
+        Assert.Single(source.Requests);
+
+        window.AbandonPage(2, 0);
         Assert.Null(window[0]);
         Assert.Equal(2, source.Requests.Count);
 
@@ -912,5 +919,4 @@ public class RustDataShapeTests
         public int BeginAsync(int commandId, string? parameter) => 0;
     }
 }
-
 

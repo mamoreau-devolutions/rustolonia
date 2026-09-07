@@ -61,6 +61,42 @@ function New-DotnetPublishCommand {
     return $command
 }
 
+function Get-PublishedProjectAssetsFile {
+    param(
+        [Parameter(Mandatory)][string]$Project,
+        [Parameter(Mandatory)][string]$Configuration,
+        [Parameter(Mandatory)][string]$Rid,
+        [string]$ArtifactsPath,
+        [string[]]$AdditionalProperties = @()
+    )
+
+    # Evaluate with the same properties as publication, including custom output layouts.
+    $arguments = @(
+        'msbuild', $Project, '-nologo', '-verbosity:quiet',
+        '-getProperty:ProjectAssetsFile',
+        "-p:Configuration=$Configuration", "-p:RuntimeIdentifier=$Rid"
+    )
+    if (-not [string]::IsNullOrWhiteSpace($ArtifactsPath)) {
+        $arguments += "-p:ArtifactsPath=$(Resolve-CallerRelativePath -PathValue $ArtifactsPath)"
+    }
+    $arguments += $AdditionalProperties
+    $output = & dotnet @arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not resolve publish restore metadata for '$Project' (exit code $LASTEXITCODE)."
+    }
+    $path = ($output -join "`n").Trim()
+    if ([string]::IsNullOrWhiteSpace($path)) {
+        throw "ProjectAssetsFile was empty for '$Project'."
+    }
+    if (-not [IO.Path]::IsPathRooted($path)) {
+        $path = Join-Path (Split-Path -Parent (Resolve-CallerRelativePath -PathValue $Project)) $path
+    }
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw "Publish restore metadata does not exist: $path"
+    }
+    return (Resolve-Path -LiteralPath $path).Path
+}
+
 function New-ProducerHeaderGenerationCommand {
     param(
         [Parameter(Mandatory)][string]$ProducerRoot

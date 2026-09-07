@@ -79,6 +79,65 @@ mod tests {
     "#;
 
     #[test]
+    fn rejects_unsupported_method_abi_before_emitting_either_surface() {
+        for (from, to, message) in [
+            (
+                "\"direction\": \"In\"",
+                "\"direction\": \"InOut\"",
+                "InOut method",
+            ),
+            (
+                "\"returnKind\": \"I32\"",
+                "\"returnKind\": \"Void\"",
+                "PreserveSig I32",
+            ),
+            (
+                "\"preserveSig\": true",
+                "\"preserveSig\": false",
+                "PreserveSig I32",
+            ),
+        ] {
+            let json = FIXTURE.replace(from, to);
+            assert!(generate_from_json(&json)
+                .unwrap_err()
+                .to_string()
+                .contains(message));
+            assert!(generate_safe_from_json(&json)
+                .unwrap_err()
+                .to_string()
+                .contains(message));
+        }
+    }
+
+    #[test]
+    fn generated_utf16_inputs_keep_terminated_buffers_alive() {
+        let fixture = generate_from_json(FIXTURE).unwrap();
+        assert!(fixture.contains("let input = input.map(crate::terminated_utf16);"));
+        assert!(
+            fixture.contains("input.as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut())")
+        );
+        let generated = generate_from_json(include_str!("../../projection.ir.json")).unwrap();
+        for method in generated.split("    pub fn ").skip(1) {
+            let Some((signature, body)) = method.split_once(" {\n") else {
+                continue;
+            };
+            if !signature.contains("&[u16]") {
+                continue;
+            }
+            assert!(
+                body.contains("crate::terminated_utf16"),
+                "Missing terminated input buffer for {signature}"
+            );
+            assert!(
+                !body.contains(".map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut())")
+                    || body
+                        .contains(".as_ref().map_or(ptr::null_mut(), |v| v.as_ptr().cast_mut())"),
+                "Nullable buffer must stay borrowed during {signature}"
+            );
+        }
+    }
+
+    #[test]
     fn emits_fixture_echo_surface() {
         let src = generate_from_json(FIXTURE).unwrap();
         assert!(src.contains("pub struct IAvnEcho"));
@@ -177,7 +236,7 @@ mod tests {
     }
 
     #[test]
-    fn version_one_void_return_is_accepted() {
+    fn version_one_void_return_is_rejected() {
         let src = generate_from_json(
             r#"
             {
@@ -195,9 +254,8 @@ mod tests {
             }
             "#,
         )
-        .unwrap();
-        assert!(src.contains("pub struct IAvnVoid"));
-        assert!(src.contains("pub fn noop"));
+        .unwrap_err();
+        assert!(src.to_string().contains("Only PreserveSig I32 HRESULT"));
     }
 
     #[test]

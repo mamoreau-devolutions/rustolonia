@@ -1,7 +1,17 @@
 //! Raw nano-COM bindings for the Avalonia NativeAOT host.
 //!
-//! Handwritten for the phase-0 fixture. Later phases replace interface
-//! vtables with IR-generated code; `ComPtr` / `Host` stay.
+//! IR-generated interfaces with handwritten ownership, host-loading, and
+//! callback infrastructure.
+
+/// Borrows an already terminated argument, or owns its terminated copy for
+/// the duration of a synchronous ABI call. Embedded NULs retain ABI semantics.
+pub(crate) fn terminated_utf16(value: &[u16]) -> std::borrow::Cow<'_, [u16]> {
+    if value.contains(&0) {
+        std::borrow::Cow::Borrowed(value)
+    } else {
+        std::borrow::Cow::Owned(value.iter().copied().chain(Some(0)).collect())
+    }
+}
 
 mod app_handler;
 mod application;

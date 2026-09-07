@@ -37,24 +37,29 @@ function Read-ConsumerManifest {
     }
     $document = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json -AsHashtable
     if ($document -isnot [hashtable]) { throw 'Invalid consumer manifest: the document must be an object' }
-    $unknown = @($document.Keys | Where-Object { $_ -notin ($script:Required + @('binary')) })
+    $unknown = @($document.Keys | Where-Object { $_ -cnotin ($script:Required + @('binary')) })
     if ($unknown.Count -gt 0) { throw "Invalid consumer manifest: unknown field(s): $($unknown -join ', ')" }
     $missing = @($script:Required | Where-Object { -not $document.ContainsKey($_) })
     if ($missing.Count -gt 0) { throw "Invalid consumer manifest: missing required field(s): $($missing -join ', ')" }
-    if ([int]$document.version -ne 1) { throw 'Invalid consumer manifest: version must be 1' }
-    foreach ($field in $script:PathFields) {
-        if ([string]::IsNullOrWhiteSpace([string]$document[$field])) { throw "Invalid consumer manifest: $field must be a non-empty string" }
+    if (($document.version -isnot [long] -and $document.version -isnot [int] -and
+         $document.version -isnot [double] -and $document.version -isnot [decimal]) -or $document.version -ne 1) {
+        throw 'Invalid consumer manifest: version must be the number 1'
     }
-    if (-not $script:RidTargets.ContainsKey([string]$document.rid)) {
+    foreach ($field in $script:PathFields) {
+        if ($document[$field] -isnot [string] -or [string]::IsNullOrWhiteSpace($document[$field])) {
+            throw "Invalid consumer manifest: $field must be a non-empty string"
+        }
+    }
+    if ($document.rid -isnot [string] -or $document.rid -cnotin $script:RidTargets.Keys) {
         throw "Invalid consumer manifest: rid must be one of: $(($script:RidTargets.Keys | Sort-Object) -join ', ')"
     }
-    if ($document.configuration -notin @('Debug', 'Release')) { throw 'Invalid consumer manifest: configuration must be Debug or Release' }
+    if ($document.configuration -isnot [string] -or $document.configuration -cnotin @('Debug', 'Release')) { throw 'Invalid consumer manifest: configuration must be Debug or Release' }
     foreach ($field in @('packageName', 'binary')) {
-        if ($document.ContainsKey($field) -and $document[$field] -and [string]$document[$field] -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]*$') {
+        if ($document.ContainsKey($field) -and ($document[$field] -isnot [string] -or $document[$field] -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]*$')) {
             throw "Invalid consumer manifest: $field must be a Cargo package/binary name"
         }
     }
-    if (-not $document.ContainsKey('binary') -or [string]::IsNullOrWhiteSpace([string]$document.binary)) {
+    if (-not $document.ContainsKey('binary')) {
         $document.binary = $document.packageName
     }
     $manifestDirectory = Split-Path -Parent $ManifestPath
@@ -141,6 +146,7 @@ function Invoke-ConsumerPackage {
         )
         $publishCommand = @('dotnet', 'publish', $hostProject, '-c', [string]$Document.configuration, '-r', $rid) + $publishProperties
         Invoke-Logged -WorkingDirectory $ProducerRootPath -Command $publishCommand
+        $consumerHostAssets = Get-PublishedProjectAssetsFile -Project $hostProject -Configuration $Document.configuration -Rid $rid -AdditionalProperties $publishProperties
         $hostFile = Join-Path $staging "Avalonia.Host$($target.HostExtension)"
         if (-not (Test-Path -LiteralPath $hostFile -PathType Leaf)) {
             throw "NativeAOT host was not produced: $hostFile"
@@ -155,7 +161,6 @@ function Invoke-ConsumerPackage {
         )
         Invoke-ArtifactSigning -ArtifactDirectory $bundle -SignCommand $env:AVALONIA_RUST_SIGN_COMMAND -ExplicitFiles $signTargets
         $consumerProducerPin = git -C $ProducerRootPath rev-parse HEAD 2>$null
-        $consumerHostAssets = Join-Path $rustoloniaRootPath 'host' 'obj' 'project.assets.json'
         & (Join-Path $PSScriptRoot 'generate-sbom.ps1') -Rid $rid -Bundle $bundle `
             -CargoLockPath (Split-Path -Parent $paths.cargoManifest | Join-Path -ChildPath 'Cargo.lock') `
             -ProjectAssetsJsonPath $consumerHostAssets `

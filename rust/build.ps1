@@ -14,7 +14,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
 
-# rust/<script> -> the Avalonia repository root is three levels up
+# The Rustolonia repository root is the parent of rust/.
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $avaloniaRoot = Join-Path $repositoryRoot 'avalonia-src'
 $nativeArchitecture = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture) {

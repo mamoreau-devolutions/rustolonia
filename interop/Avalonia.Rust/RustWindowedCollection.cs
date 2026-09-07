@@ -174,12 +174,9 @@ public sealed class RustWindowedCollection : IList, IReadOnlyList<object?>, INot
         ArgumentNullException.ThrowIfNull(elements);
         if (_disposed)
             return false;
-        // The page stops being outstanding whatever the outcome: a rejected
-        // batch must leave the page requestable again, not stranded.
-        if (offset >= 0 && offset % PageSize == 0)
-            _pending.Remove((int)(offset / PageSize));
         if (generation != _generation)
             return false;
+        AbandonPage(generation, offset);
         var total = ClampTotal(totalCount);
         if (total != _totalCount)
             return false;
@@ -270,6 +267,13 @@ public sealed class RustWindowedCollection : IList, IReadOnlyList<object?>, INot
         if (offset < 0 || offset % PageSize != 0)
             return;
         _pending.Remove((int)(offset / PageSize));
+    }
+
+    /// <summary>Abandons only a request belonging to the supplied dataset generation.</summary>
+    public void AbandonPage(long generation, long offset)
+    {
+        if (generation == _generation)
+            AbandonPage(offset);
     }
 
     /// <summary>

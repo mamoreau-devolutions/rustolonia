@@ -59,6 +59,7 @@ if (-not [string]::IsNullOrWhiteSpace($ViewRegistryFile)) {
 Write-Host "==> Publishing Avalonia.Host ($Rid, $Configuration)"
 $publishCommand = New-DotnetPublishCommand -Project $hostProject -Configuration $Configuration -Rid $Rid -ArtifactsPath $artifactsRoot -AdditionalProperties $publishProperties
 Invoke-Logged -Command $publishCommand
+$hostAssets = Get-PublishedProjectAssetsFile -Project $hostProject -Configuration $Configuration -Rid $Rid -ArtifactsPath $artifactsRoot -AdditionalProperties $publishProperties
 
 $publishDir = Join-Path $artifactsRoot 'publish' 'Avalonia.Host' "$($Configuration.ToLowerInvariant())_$Rid"
 $hostFile = Join-Path $publishDir "Avalonia.Host$($target.HostExtension)"
@@ -100,7 +101,6 @@ if (-not $SkipCargoBuild -and -not $env:AVN_PACKAGE_SKIP_CARGO_BUILD) {
 Invoke-ArtifactSigning -ArtifactDirectory $destination -SignCommand $env:AVALONIA_RUST_SIGN_COMMAND -ExplicitFiles $signTargets
 Write-Host '==> Writing deterministic CycloneDX delivery SBOM'
 $producerPin = git -C $resolvedProducerRoot rev-parse HEAD 2>$null
-$hostAssets = Join-Path $resolvedRustoloniaRoot 'host' 'obj' 'project.assets.json'
 & (Join-Path $PSScriptRoot 'generate-sbom.ps1') -Rid $Rid -Bundle $destination `
     -CargoLockPath (Join-Path $resolvedRustoloniaRoot 'rust' 'Cargo.lock') `
     -ProjectAssetsJsonPath $hostAssets `

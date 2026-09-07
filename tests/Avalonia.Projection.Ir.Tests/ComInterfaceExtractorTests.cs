@@ -1,5 +1,9 @@
 using System;
 using System.Linq;
+using System.Reflection;
+using System.Reflection.Emit;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 using Avalonia.Host.Com;
 using Avalonia.Projection.Ir;
 using Xunit;
@@ -8,12 +12,56 @@ namespace Avalonia.Projection.Ir.Tests;
 
 public class ComInterfaceExtractorTests
 {
+    [Theory]
+    [InlineData("unsupported")]
+    [InlineData("inout")]
+    [InlineData("return")]
+    [InlineData("preservesig")]
+    [InlineData("accessor")]
+    public void Unsupported_middle_slot_fails_instead_of_compacting_vtable(string shape)
+    {
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(
+            new AssemblyName("InvalidComFixture" + shape), AssemblyBuilderAccess.Run);
+        var type = assembly.DefineDynamicModule("Fixture").DefineType(
+            "Fixture.IInvalid", TypeAttributes.Public | TypeAttributes.Interface | TypeAttributes.Abstract);
+        type.SetCustomAttribute(new CustomAttributeBuilder(
+            typeof(GeneratedComInterfaceAttribute).GetConstructor(Type.EmptyTypes)!, []));
+        for (var slot = 0; slot < 3; slot++)
+        {
+            var attributes = MethodAttributes.Public | MethodAttributes.Abstract | MethodAttributes.Virtual;
+            if (slot == 1 && shape == "accessor")
+                attributes |= MethodAttributes.SpecialName;
+            var parameter = slot == 1 ? shape switch
+            {
+                "unsupported" => typeof(decimal),
+                "inout" => typeof(int).MakeByRefType(),
+                _ => typeof(int),
+            } : typeof(int);
+            var method = type.DefineMethod("Slot" + slot, attributes,
+                slot == 1 && shape == "return" ? typeof(void) : typeof(int), [parameter]);
+            method.DefineParameter(1, ParameterAttributes.None, "value");
+            if (slot != 1 || shape != "preservesig")
+                method.SetCustomAttribute(new CustomAttributeBuilder(
+                    typeof(PreserveSigAttribute).GetConstructor(Type.EmptyTypes)!, []));
+        }
+        var fixture = new FixtureAssembly(type.CreateType()!);
+        var error = Assert.Throws<InvalidOperationException>(() => ComInterfaceExtractor.Extract(fixture));
+        Assert.Contains("Slot1", error.Message);
+        Assert.Contains("published vtable", error.Message);
+    }
+
+    private sealed class FixtureAssembly(Type type) : Assembly
+    {
+        public override Type[] GetExportedTypes() => [type];
+        public override AssemblyName GetName(bool copiedName) => new("Fixture");
+    }
+
     [Fact]
     public void Extracts_fixture_com_interfaces_from_host()
     {
         var ir = ComInterfaceExtractor.Extract(typeof(IAvnEcho).Assembly, new ProjectionPolicy
         {
-            IncludeNamespaces = ["Avalonia.Host.Com"],
+            IncludeTypeNames = [typeof(IAvnEcho).FullName!, typeof(IAvnActivationFactory).FullName!],
         });
 
         Assert.Equal("Avalonia.Host", ir.SourceAssembly);
@@ -48,7 +96,7 @@ public class ComInterfaceExtractorTests
     {
         var ir = ComInterfaceExtractor.Extract(typeof(IAvnEcho).Assembly, new ProjectionPolicy
         {
-            IncludeNamespaces = ["Avalonia.Host.Com"],
+            IncludeTypeNames = [typeof(IAvnEcho).FullName!, typeof(IAvnActivationFactory).FullName!],
         });
         var json = ir.ToJson();
         var again = ProjectionIr.FromJson(json);
@@ -63,7 +111,7 @@ public class ComInterfaceExtractorTests
     {
         var ir = ComInterfaceExtractor.Extract(typeof(IAvnEcho).Assembly, new ProjectionPolicy
         {
-            IncludeNamespaces = ["Avalonia.Host.Com"],
+            IncludeTypeNames = [typeof(IAvnEcho).FullName!, typeof(IAvnActivationFactory).FullName!],
             ExcludeTypeNames = [typeof(IAvnActivationFactory).FullName!],
         });
         Assert.DoesNotContain(ir.Types, t => t.Name == "IAvnActivationFactory");
