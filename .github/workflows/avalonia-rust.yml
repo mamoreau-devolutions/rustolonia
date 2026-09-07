@@ -80,15 +80,17 @@ jobs:
             'projection/Avalonia.ViewModelProjection.Tool/Avalonia.ViewModelProjection.Tool.csproj',
             'avalonia-src/src/Avalonia.Build.Tasks/Avalonia.Build.Tasks.csproj'
           )
+          $delays = @(15, 30, 60, 90, 120)
           foreach ($project in $projects) {
             $attempt = 0
             while ($true) {
               $attempt++
               dotnet restore $project
               if ($LASTEXITCODE -eq 0) { break }
-              if ($attempt -ge 4) { throw "restore failed after $attempt attempts: $project" }
-              Write-Host "restore of $project failed (attempt $attempt); retrying in 15s"
-              Start-Sleep -Seconds 15
+              if ($attempt -gt $delays.Length) { throw "restore failed after $attempt attempts: $project" }
+              $delay = $delays[$attempt - 1]
+              Write-Host "restore of $project failed (attempt $attempt); retrying in ${delay}s"
+              Start-Sleep -Seconds $delay
             }
           }
 
@@ -156,7 +158,7 @@ jobs:
 
       - name: Package NativeAOT sample artifacts
         shell: pwsh
-        run: ./rust/package.ps1 -Rid ${{ matrix.rid }} -Configuration Release -Example rust_vm_axaml
+        run: ./rust/package.ps1 -Rid ${{ matrix.rid }} -Configuration Release -Example rust_vm_axaml -PresentationProject samples/RustViewModelSample.Managed/RustViewModelSample.Managed.csproj -ViewRegistryFile samples/RustViewModelSample.Managed/Generated/RustViewRegistry.g.cs
 
       - name: Verify package checksums
         shell: pwsh
@@ -262,14 +264,16 @@ jobs:
         shell: pwsh
         run: |
           $project = 'avalonia-src/src/Avalonia.Build.Tasks/Avalonia.Build.Tasks.csproj'
+          $delays = @(15, 30, 60, 90, 120)
           $attempt = 0
           while ($true) {
             $attempt++
             dotnet restore $project
             if ($LASTEXITCODE -eq 0) { break }
-            if ($attempt -ge 4) { throw "restore failed after $attempt attempts: $project" }
-            Write-Host "restore of $project failed (attempt $attempt); retrying in 15s"
-            Start-Sleep -Seconds 15
+            if ($attempt -gt $delays.Length) { throw "restore failed after $attempt attempts: $project" }
+            $delay = $delays[$attempt - 1]
+            Write-Host "restore of $project failed (attempt $attempt); retrying in ${delay}s"
+            Start-Sleep -Seconds $delay
           }
 
       - name: Build the producer's build tasks
@@ -278,7 +282,7 @@ jobs:
 
       - name: Cross-package NativeAOT sample artifacts
         shell: pwsh
-        run: ./rust/package.ps1 -Rid ${{ matrix.rid }} -Configuration Release -Example rust_vm_axaml
+        run: ./rust/package.ps1 -Rid ${{ matrix.rid }} -Configuration Release -Example rust_vm_axaml -PresentationProject samples/RustViewModelSample.Managed/RustViewModelSample.Managed.csproj -ViewRegistryFile samples/RustViewModelSample.Managed/Generated/RustViewRegistry.g.cs
 
       - name: Verify package checksums
         shell: pwsh

@@ -14,7 +14,9 @@ param(
     [string]$OutputRoot,
     [switch]$SkipCargoBuild,
     [string]$RustoloniaRoot = (Split-Path -Parent $PSScriptRoot),
-    [string]$ProducerRoot
+    [string]$ProducerRoot,
+    [string]$PresentationProject,
+    [string]$ViewRegistryFile
 )
 
 Set-StrictMode -Version Latest
@@ -45,6 +47,14 @@ $OutputRoot = Resolve-CallerRelativePath -PathValue $OutputRoot
 $destination = Join-Path $OutputRoot $Rid
 
 $publishProperties = New-HostPublishProperties -ProducerRoot $resolvedProducerRoot -RustoloniaRoot $resolvedRustoloniaRoot -Rid $Rid -HostPlatform $($target.Platform)
+if (-not [string]::IsNullOrWhiteSpace($PresentationProject)) {
+    $resolvedPresentationProject = (Resolve-Path -LiteralPath (Resolve-CallerRelativePath -PathValue $PresentationProject)).Path
+    $publishProperties += "-p:AvaloniaRustPresentationProjects=$resolvedPresentationProject"
+}
+if (-not [string]::IsNullOrWhiteSpace($ViewRegistryFile)) {
+    $resolvedViewRegistryFile = (Resolve-Path -LiteralPath (Resolve-CallerRelativePath -PathValue $ViewRegistryFile)).Path
+    $publishProperties += "-p:AvaloniaRustViewRegistryFile=$resolvedViewRegistryFile"
+}
 
 Write-Host "==> Publishing Avalonia.Host ($Rid, $Configuration)"
 $publishCommand = New-DotnetPublishCommand -Project $hostProject -Configuration $Configuration -Rid $Rid -ArtifactsPath $artifactsRoot -AdditionalProperties $publishProperties
