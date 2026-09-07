@@ -93,6 +93,10 @@ public static class OwnedOutputs
 
         foreach (var (path, expected) in files.OrderBy(entry => entry.Key, StringComparer.OrdinalIgnoreCase))
         {
+            var directory = Path.GetDirectoryName(Path.GetFullPath(path))!;
+            var otherOwners = OtherOwners(directory, Path.GetFileName(path), generatorId);
+            if (otherOwners.Count > 0)
+                mismatches.Add($"CONFLICT: {path} is owned by {string.Join(", ", otherOwners)}");
             if (!File.Exists(path))
             {
                 mismatches.Add($"MISSING: {path}");
@@ -196,8 +200,8 @@ public static class OwnedOutputs
                     ?? throw new InvalidOperationException($"Output path '{path}' has no directory.");
                 Directory.CreateDirectory(directory);
                 var temp = path + $".owned-tmp-{Guid.NewGuid():N}";
-                File.WriteAllText(temp, content, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
                 staged.Add((path, temp));
+                File.WriteAllText(temp, content, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
             }
         }
         catch
@@ -247,8 +251,8 @@ public static class OwnedOutputs
                 var json = JsonSerializer.Serialize(manifest, JsonOptions).Replace("\r\n", "\n", StringComparison.Ordinal) + "\n";
                 var destination = Path.Combine(directory, ManifestFileName(generatorId));
                 var temp = destination + $".owned-tmp-{Guid.NewGuid():N}";
-                File.WriteAllText(temp, json, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
                 manifestTemps.Add((destination, temp));
+                File.WriteAllText(temp, json, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
             }
 
             foreach (var (destination, temp) in manifestTemps)

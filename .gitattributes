@@ -22,3 +22,14 @@ rust/view-model.ir.json text eol=lf
 rust/avalonia-sys/include/avalonia-rust-abi.h text eol=lf
 rust/view-model.contract.md text eol=lf
 rust/projection.ir.gaps.txt text eol=lf
+
+**/.*.owned.json text eol=lf linguist-generated=true
+host/Generated/** linguist-generated=true
+samples/RustViewModelSample.Managed/Generated/** linguist-generated=true
+rust/avalonia-sys/src/generated.rs linguist-generated=true
+rust/avalonia/src/generated.rs linguist-generated=true
+rust/avalonia/src/generated_view_models.rs linguist-generated=true
+rust/avalonia-sys/include/avalonia-rust-abi.h linguist-generated=true
+rust/projection.ir.json linguist-generated=true
+rust/projection.ir.gaps.txt linguist-generated=true
+rust/view-model.contract.md linguist-generated=true

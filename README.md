@@ -30,7 +30,9 @@ pwsh ./rust/regenerate-and-build.ps1 -Configuration Release
 ```
 
 The regeneration pipeline (IR, generated C#, native header, Rust bindings) is
-deterministic; CI fails if regenerating changes the checkout.
+deterministic; CI fails if regenerating changes the checkout. Generated outputs
+have checked-in ownership manifests so stale cleanup does not erase another
+generator's files. Generator CLIs also provide non-mutating `--check` modes.
 
 Open `Rustolonia.slnx` for the managed projects. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for the contributor workflow and code-generation

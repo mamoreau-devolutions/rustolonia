@@ -207,6 +207,22 @@ public class OwnedOutputWriterTests
     }
 
     [Fact]
+    public void Check_reports_another_generators_claim_without_writing()
+    {
+        using var scratch = new Scratch();
+        var shared = Path.Combine(scratch.Root, "shared.g.cs");
+        var files = new Dictionary<string, string> { [shared] = "same\n" };
+        OwnedOutputs.Write(OwnedOutputs.ProjectionGeneratorId, files);
+
+        var result = OwnedOutputs.Check(OwnedOutputs.ViewModelGeneratorId, files);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Mismatches, mismatch => mismatch.Contains("CONFLICT", StringComparison.Ordinal));
+        Assert.Equal("same\n", File.ReadAllText(shared));
+        Assert.False(File.Exists(Path.Combine(scratch.Root, OwnedOutputs.ManifestFileName(OwnedOutputs.ViewModelGeneratorId))));
+    }
+
+    [Fact]
     public void Write_does_not_delete_a_file_still_owned_by_another_generator()
     {
         using var scratch = new Scratch();

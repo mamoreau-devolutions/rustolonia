@@ -58,6 +58,17 @@ Edit projection policy, schemas and generators rather than generated C#, Rust
 or native headers. Regenerate related outputs together, preserve canonical LF
 line endings, and inspect the resulting diff for unintended API changes.
 
+Each generator records its files and content hashes in a checked-in
+`.*.owned.json` sidecar. Keep these manifests with their outputs. Regeneration
+prunes only previously owned, unmodified obsolete files and refuses conflicting
+claims from another generator. Do not manually delete or rewrite the manifests
+to bypass a conflict.
+
+The two managed projection tools and `avalonia-bindgen` accept `--check` before
+their normal positional arguments. This compares outputs without creating or
+rewriting them. `--check --normalize` is rejected rather than silently modifying
+the view-model input.
+
 Published IIDs, vtable order, calling conventions and ownership semantics must
 not change under an existing identity. Follow `rust/COMPATIBILITY.md`; preserve
 regression coverage when reorganizing old wave-named tests.

@@ -89,6 +89,16 @@ pub fn check_outputs(
     let map = destination_map(generator_id, files)?;
     let mut report = CheckReport::default();
     for (path, expected) in &map {
+        let directory = path.parent().unwrap_or_else(|| Path::new("."));
+        let leaf = path.file_name().and_then(|name| name.to_str()).unwrap();
+        let others = other_owners(directory, leaf, generator_id)?;
+        if !others.is_empty() {
+            report.mismatches.push(format!(
+                "CONFLICT: {} is owned by {}",
+                path.display(),
+                others.join(", ")
+            ));
+        }
         if !path.exists() {
             report
                 .mismatches
@@ -250,7 +260,10 @@ pub fn write_outputs(
         return Err(error);
     }
     for (destination, temp) in &manifest_temps {
-        replace_file(temp, destination)?;
+        if let Err(error) = replace_file(temp, destination) {
+            delete_temps(&manifest_temps);
+            return Err(error);
+        }
     }
     Ok(())
 }
@@ -480,8 +493,17 @@ fn create_exclusive_temp(directory: &Path, bytes: &[u8]) -> Result<PathBuf, Gene
         ));
         match OpenOptions::new().write(true).create_new(true).open(&path) {
             Ok(mut file) => {
-                file.write_all(bytes)?;
-                file.sync_all()?;
+                let result = file.write_all(bytes).and_then(|()| file.sync_all());
+                drop(file);
+                if let Err(error) = result {
+                    if let Err(cleanup_error) = fs::remove_file(&path) {
+                        return Err(GenerationError::invalid(format!(
+                            "Failed to stage '{}': {error}; cleanup also failed: {cleanup_error}",
+                            path.display()
+                        )));
+                    }
+                    return Err(error.into());
+                }
                 return Ok(path);
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
@@ -495,28 +517,8 @@ fn create_exclusive_temp(directory: &Path, bytes: &[u8]) -> Result<PathBuf, Gene
 }
 
 fn replace_file(temp: &Path, destination: &Path) -> Result<(), GenerationError> {
-    if !destination.exists() {
-        fs::rename(temp, destination)?;
-        return Ok(());
-    }
-    if cfg!(unix) {
-        fs::rename(temp, destination)?;
-        return Ok(());
-    }
-    let parent = destination.parent().unwrap_or_else(|| Path::new("."));
-    let backup = create_exclusive_temp(parent, &[])?;
-    fs::remove_file(&backup)?;
-    fs::rename(destination, &backup)?;
-    match fs::rename(temp, destination) {
-        Ok(()) => {
-            let _ = fs::remove_file(backup);
-            Ok(())
-        }
-        Err(error) => {
-            let _ = fs::rename(&backup, destination);
-            Err(error.into())
-        }
-    }
+    fs::rename(temp, destination)?;
+    Ok(())
 }
 
 fn delete_temps(staged: &[(PathBuf, PathBuf)]) {
@@ -564,6 +566,33 @@ mod tests {
             .iter()
             .any(|item| item.contains("MISSING:")));
         assert!(!missing_root.exists());
+        cleanup(&root);
+    }
+
+    #[test]
+    fn check_reports_another_generators_claim_without_mutating_it() {
+        let root = scratch();
+        let output = root.join("shared.rs");
+        write_outputs("first-generator", &[(output.clone(), "same\n".into())]).unwrap();
+        let report =
+            check_outputs("second-generator", &[(output.clone(), "same\n".into())]).unwrap();
+        assert!(!report.success());
+        assert!(report
+            .mismatches
+            .iter()
+            .any(|message| message.contains("CONFLICT")));
+        assert_eq!(fs::read_to_string(output).unwrap(), "same\n");
+        assert!(!root.join(".second-generator.owned.json").exists());
+        cleanup(&root);
+    }
+
+    #[test]
+    fn replacement_preserves_existing_file_when_source_is_missing() {
+        let root = scratch();
+        let destination = root.join("generated.rs");
+        fs::write(&destination, "previous\n").unwrap();
+        assert!(replace_file(&root.join("missing-temp"), &destination).is_err());
+        assert_eq!(fs::read_to_string(destination).unwrap(), "previous\n");
         cleanup(&root);
     }
 
