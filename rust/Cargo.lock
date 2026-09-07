@@ -6,6 +6,7 @@ version = 4
 name = "avalonia"
 version = "0.1.0"
 dependencies = [
+ "avalonia-sample",
  "avalonia-sys",
 ]
 
@@ -16,6 +17,13 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+]
+
+[[package]]
+name = "avalonia-sample"
+version = "0.1.0"
+dependencies = [
+ "avalonia",
 ]
 
 [[package]]

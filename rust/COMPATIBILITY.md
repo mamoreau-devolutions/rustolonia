@@ -7,9 +7,11 @@ one release with crates from another release.
 
 ## Generated IR
 
-`projection.ir.json` and `view-model.ir.json` are versioned schemas. A
-generator change must regenerate all checked-in managed, Rust, and contract
-outputs in the same change. Additive, optional schema fields require a schema
+`projection.ir.json` (framework object model) and
+`rust/avalonia-sample/view-model.ir.json` (sample/application schema) are
+versioned schemas. A generator change must regenerate all checked-in managed,
+Rust, and contract outputs in the same change. Sample-only Rust API that used
+to be reexported from `avalonia` now lives in `avalonia-sample`. Additive, optional schema fields require a schema
 version bump and readers that reject unsupported future versions clearly.
 Removing or changing the meaning, type, ordering, or requiredness of an
 existing field is breaking and requires a coordinated major release.

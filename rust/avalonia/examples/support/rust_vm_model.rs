@@ -1,5 +1,5 @@
 use crate::support::desktop_files::DesktopFiles;
-use avalonia::{
+use avalonia_sample::{
     AddressViewModel, AddressViewModelSink, LogNodeViewModel, LogNodeViewModelSink, Priority,
     SampleViewModel, SampleViewModelSink, SaveReportViewModel, SaveReportViewModelSink,
     TaskItemViewModel, TaskItemViewModelSink, TraceEventViewModel, TraceEventViewModelSink,

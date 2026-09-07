@@ -10,3 +10,6 @@ publish = false
 
 [dependencies]
 avalonia-sys = { path = "../avalonia-sys" }
+
+[dev-dependencies]
+avalonia-sample = { path = "../avalonia-sample" }

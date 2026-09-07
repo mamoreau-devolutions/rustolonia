@@ -11,6 +11,8 @@
     <ProjectReference Include="$(AvaloniaProducerRoot)\packages\Avalonia\Avalonia.csproj" />
     <ProjectReference Include="..\..\interop\Avalonia.Rust\Avalonia.Rust.csproj" />
     <ProjectReference Include="..\..\interop\Avalonia.Rust.Interop\Avalonia.Rust.Interop.csproj" />
+    <!-- Host consumes the generated registry via AvaloniaRustViewRegistryFile. -->
+    <Compile Remove="Generated\RustViewRegistry.g.cs" />
   </ItemGroup>
   <Import Project="..\..\build\NullableEnable.props" />
   <Import Project="..\..\build\BuildTargets.targets" />

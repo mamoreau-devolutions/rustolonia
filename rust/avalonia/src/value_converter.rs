@@ -1,5 +1,5 @@
 //! Handwritten, model-independent registration for Rust-authored value
-//! converters. Generated code (see `generated_view_models.rs`) supplies the
+//! converters. Application-owned generated code supplies the
 //! per-schema `ValueConverters` trait and a dispatch bridge; this module owns
 //! the COM object lifetime, application-scoped registration, and conflict
 //! rejection required by the architecture review.

@@ -1,5 +1,7 @@
 //! Generated from view-model.ir.json. Do not edit.
 
+#![allow(dead_code)]
+
 #[repr(i64)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Priority {
@@ -402,28 +404,24 @@ impl<T: SampleViewModel> crate::view_model::DynamicViewModel for SampleViewModel
     }
 }
 
-impl crate::AppScope { pub fn mount_rust_vm_window(&self, model: impl SampleViewModel) -> crate::Result<()> { self.mount_dynamic_view_model(1, SampleViewModelDispatch { model }) } }
-impl crate::AppScope {
-    pub fn mount_rust_vm_window_with_converters<C: ValueConverters>(
-        &self,
+pub fn mount_rust_vm_window(scope: &crate::AppScope, model: impl SampleViewModel) -> crate::Result<()> { scope.mount_dynamic_view_model(1, SampleViewModelDispatch { model }) }
+pub fn mount_rust_vm_window_with_converters<C: ValueConverters>(
+    scope: &crate::AppScope,
         model: impl SampleViewModel,
         converters: C,
     ) -> crate::Result<()> {
-        self.register_value_converters(converters)?;
-        self.mount_rust_vm_window(model)
+        register_value_converters(scope, converters)?;
+        mount_rust_vm_window(scope, model)
     }
-}
-impl crate::AppScope { pub fn mount_rust_dynamic_vm_window(&self, model: impl SampleViewModel) -> crate::Result<()> { self.mount_dynamic_view_model(2, SampleViewModelDispatch { model }) } }
-impl crate::AppScope {
-    pub fn mount_rust_dynamic_vm_window_with_converters<C: ValueConverters>(
-        &self,
+pub fn mount_rust_dynamic_vm_window(scope: &crate::AppScope, model: impl SampleViewModel) -> crate::Result<()> { scope.mount_dynamic_view_model(2, SampleViewModelDispatch { model }) }
+pub fn mount_rust_dynamic_vm_window_with_converters<C: ValueConverters>(
+    scope: &crate::AppScope,
         model: impl SampleViewModel,
         converters: C,
     ) -> crate::Result<()> {
-        self.register_value_converters(converters)?;
-        self.mount_rust_dynamic_vm_window(model)
+        register_value_converters(scope, converters)?;
+        mount_rust_dynamic_vm_window(scope, model)
     }
-}
 
 #[derive(Clone, Debug)]
 pub struct AddressViewModelSink(crate::view_model::ViewModelSink);
@@ -825,8 +823,6 @@ impl<T: ValueConverters> crate::value_converter::ValueConverterDispatch for Valu
     }
 }
 
-impl crate::AppScope {
-    pub fn register_value_converters(&self, converters: impl ValueConverters) -> crate::Result<()> {
-        self.register_value_converter_dispatch(ValueConvertersDispatch { converters })
-    }
+pub fn register_value_converters(scope: &crate::AppScope, converters: impl ValueConverters) -> crate::Result<()> {
+    scope.register_value_converter_dispatch(ValueConvertersDispatch { converters })
 }

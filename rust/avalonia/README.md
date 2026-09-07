@@ -1,8 +1,10 @@
 # avalonia
 
 Idiomatic Rust API for Avalonia, generated on top of `avalonia-sys` from the
-same `projection.ir.json` and `view-model.ir.json` that generate the managed
-C# COM wrappers.
+same `projection.ir.json` that generates the managed C# COM wrappers.
+Application view-model schemas are owned by the consuming crate — the flagship
+sample uses [`../avalonia-sample`](../avalonia-sample) — not by this generic
+API crate.
 
 This crate is source-only: `publish = false` because it only works against a
 matching `Avalonia.Host` NativeAOT build produced from the same checkout, not

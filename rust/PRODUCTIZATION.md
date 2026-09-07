@@ -110,11 +110,13 @@ previously separate, manually copy-pasted commands from README.md's
    assemblies (`Avalonia.Projection.Tool`).
 2. Regenerate the Rust `avalonia-sys`/`avalonia` bindings from that IR
    (`avalonia-bindgen`), then `cargo fmt --all`.
-3. Regenerate the managed adapters, host view registry, Rust view-model
-   model/sink, and `view-model.contract.md` from the checked-in canonical
-   `view-model.ir.json` (`Avalonia.ViewModelProjection.Tool`).
-4. Build the managed AXAML (`dotnet build` on `Avalonia.Host`, which
-   references `RustViewModelSample.Managed`) and build the Rust workspace
+3. Regenerate the managed adapters, application view registry, Rust
+   view-model API, and `view-model.contract.md` from the sample-owned
+   `rust/avalonia-sample/view-model.ir.json` (`Avalonia.ViewModelProjection.Tool`
+   with `--external-rust`).
+4. Build the code-first host (no sample presentation), then the
+   sample-composed host (`AvaloniaRustPresentationProjects` +
+   `AvaloniaRustViewRegistryFile`), then the Rust workspace
    (`cargo build --workspace`).
 
 ```powershell

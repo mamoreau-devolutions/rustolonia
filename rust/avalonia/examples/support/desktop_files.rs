@@ -19,9 +19,10 @@
 
 use avalonia::{
     ActivationEvent, AppScope, ClipboardData, DragDropEffects, FileDropEvent, FileTypeFilter,
-    FolderPickerOptions, OpenFilePickerOptions, PickerOutcome, RecentFileList, SampleViewModelSink,
-    SaveFilePickerOptions, StorageItem, Window, SAMPLE_VIEW_MODEL_RECENT_FILES_CAPACITY,
+    FolderPickerOptions, OpenFilePickerOptions, PickerOutcome, RecentFileList,
+    SaveFilePickerOptions, StorageItem, Window,
 };
+use avalonia_sample::{SampleViewModelSink, SAMPLE_VIEW_MODEL_RECENT_FILES_CAPACITY};
 use std::sync::{Arc, Mutex};
 
 /// Conservative accepted effects for the sample's drop target. The host answers

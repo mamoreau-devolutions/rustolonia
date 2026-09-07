@@ -15,8 +15,7 @@
     <EnableRuntimeMarshalling>true</EnableRuntimeMarshalling>
     <UseMicroCom>true</UseMicroCom>
     <UseMicroComGeneratorRoslyn>true</UseMicroComGeneratorRoslyn>
-    <!-- Consumers replace these two inputs when publishing a NativeAOT host. -->
-    <AvaloniaRustPresentationProjects Condition="'$(AvaloniaRustPresentationProjects)' == ''">..\samples\RustViewModelSample.Managed\RustViewModelSample.Managed.csproj</AvaloniaRustPresentationProjects>
+    <!-- Code-first host default: no sample presentation. Apps supply AvaloniaRustPresentationProjects and AvaloniaRustViewRegistryFile. -->
     <AvaloniaRustHostPlatform Condition="'$(AvaloniaRustHostPlatform)' == '' and $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win-'))">Win32</AvaloniaRustHostPlatform>
     <AvaloniaRustHostPlatform Condition="'$(AvaloniaRustHostPlatform)' == '' and $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('linux-'))">X11</AvaloniaRustHostPlatform>
     <AvaloniaRustHostPlatform Condition="'$(AvaloniaRustHostPlatform)' == '' and $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-'))">OSX</AvaloniaRustHostPlatform>
@@ -47,11 +46,13 @@
     <ProjectReference Include="$(AvaloniaProducerRoot)\src\Avalonia.Themes.Fluent\Avalonia.Themes.Fluent.csproj" />
     <ProjectReference Include="..\interop\Avalonia.Rust\Avalonia.Rust.csproj" />
     <ProjectReference Include="..\interop\Avalonia.Rust.Interop\Avalonia.Rust.Interop.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(AvaloniaRustPresentationProjects)' != ''">
     <AvaloniaRustPresentationProject Include="$(AvaloniaRustPresentationProjects)" />
     <ProjectReference Include="@(AvaloniaRustPresentationProject)" />
   </ItemGroup>
   <ItemGroup Condition="'$(AvaloniaRustViewRegistryFile)' != ''">
-    <Compile Remove="Generated\ViewModels\RustViewRegistry.g.cs" />
+    <Compile Remove="ViewRegistry.cs" />
     <Compile Include="$(AvaloniaRustViewRegistryFile)" Link="Generated\ViewModels\RustViewRegistry.g.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(AvaloniaRustHostPlatform)' == 'Win32'">

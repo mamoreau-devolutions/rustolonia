@@ -43,13 +43,15 @@ finally
     Pop-Location
 }
 
-Write-Host "==> [1/4] Regenerating view-model adapters/registry/Rust model/contract from the canonical view-model IR"
+Write-Host "==> [1/4] Regenerating view-model adapters/registry/Rust model/contract from the sample-owned view-model IR"
+$sampleManagedGenerated = Join-Path $repositoryRoot 'samples' 'RustViewModelSample.Managed' 'Generated'
 dotnet run --project (Join-Path $repositoryRoot 'projection' 'Avalonia.ViewModelProjection.Tool') -c $Configuration -- `
-    (Join-Path $repositoryRoot 'rust' 'view-model.ir.json') `
-    (Join-Path $repositoryRoot 'samples' 'RustViewModelSample.Managed' 'Generated') `
-    (Join-Path $repositoryRoot 'host' 'Generated' 'ViewModels') `
-    (Join-Path $repositoryRoot 'rust' 'avalonia' 'src' 'generated_view_models.rs') `
-    (Join-Path $repositoryRoot 'rust' 'view-model.contract.md')
+    (Join-Path $repositoryRoot 'rust' 'avalonia-sample' 'view-model.ir.json') `
+    $sampleManagedGenerated `
+    $sampleManagedGenerated `
+    (Join-Path $repositoryRoot 'rust' 'avalonia-sample' 'src' 'generated_view_models.rs') `
+    (Join-Path $repositoryRoot 'rust' 'avalonia-sample' 'view-model.contract.md') `
+    --external-rust
 if ($LASTEXITCODE -ne 0)
 {
     exit $LASTEXITCODE
@@ -71,8 +73,17 @@ finally
 
 if (-not $SkipManagedBuild)
 {
-    Write-Host "==> [2/4] Building managed AXAML (RustViewModelSample.Managed via Avalonia.Host)"
+    Write-Host "==> [2/4] Building code-first host (no sample presentation) and sample-composed host"
     dotnet build (Join-Path $repositoryRoot 'host' 'Avalonia.Host.csproj') -c $Configuration
+    if ($LASTEXITCODE -ne 0)
+    {
+        exit $LASTEXITCODE
+    }
+    $samplePresentation = Join-Path $repositoryRoot 'samples' 'RustViewModelSample.Managed' 'RustViewModelSample.Managed.csproj'
+    $sampleRegistry = Join-Path $repositoryRoot 'samples' 'RustViewModelSample.Managed' 'Generated' 'RustViewRegistry.g.cs'
+    dotnet build (Join-Path $repositoryRoot 'host' 'Avalonia.Host.csproj') -c $Configuration `
+        -p:AvaloniaRustPresentationProjects=$samplePresentation `
+        -p:AvaloniaRustViewRegistryFile=$sampleRegistry
     if ($LASTEXITCODE -ne 0)
     {
         exit $LASTEXITCODE

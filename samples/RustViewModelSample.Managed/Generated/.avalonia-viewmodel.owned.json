@@ -26,6 +26,10 @@
       "sha256": "de129a7b6b97a659743c7fab468f37003b6ba30b60753e63b06131e6c973ba32"
     },
     {
+      "path": "RustViewRegistry.g.cs",
+      "sha256": "10fc1b676cbb85e76bdf0ac16bf05fa24083e606b455b367751c3b7bd112e2b9"
+    },
+    {
       "path": "SampleViewModelAdapter.g.cs",
       "sha256": "042093d020971e8c757a3aa0ee3bbbedaeea60b9a1532480d7664263b406825a"
     },
