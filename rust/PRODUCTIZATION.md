@@ -298,43 +298,27 @@ cargo package --list -p avalonia-bindgen --allow-dirty
 
 ## SBOM (EU CRA) scope
 
-The repository's CycloneDX SBOM generation (`nukebuild/SbomGenerator.cs`,
-`CreateSbom` target) walks published NuGet packages: for each one it resolves
-the packed assemblies' NuGet dependency graph and, where a package bundles a
-built webapp (Numerge-merged assemblies, npm-built browser bundles), that
-bundled content too. It does not scan arbitrary files on disk, so it does not
-need to be told about something that is never packed into a shipped NuGet
-package.
+Rustolonia does not carry the upstream Avalonia producer's NUKE build or its
+`SbomGenerator.cs`/Numerge infrastructure; none of that exists in this
+repository. Rustolonia is not a NuGet package producer at all: every managed
+project in this repository (`Avalonia.Host`, `Avalonia.Rust`,
+`Avalonia.Rust.Interop`, `Avalonia.Projection.*`,
+`Avalonia.ViewModelProjection.Tool`) is `IsPackable=false`, and the `rust/*`
+crates are `publish = false` (see [Source-only crate
+packaging](#source-only-crate-packaging) above). There is no shipped `.nupkg`
+or published crate for a package-level SBOM generator to cover.
 
-Everything this stage adds stays outside a shipped NuGet package, by design,
-and the checks below are what keep that true instead of assumed:
-
-- **`Avalonia.Host`, `Avalonia.Rust`, `Avalonia.Rust.Interop`,
-  `Avalonia.Projection.*`, `Avalonia.ViewModelProjection.Tool`** remain
-  `IsPackable=false` (unchanged by this stage). None are referenced by
-  `nukebuild/numerge.json`. A project only needs SBOM coverage once it is
-  packed into a published `.nupkg`; do not flip `IsPackable` to `true` for
-  any of these without also giving `nukebuild/SbomGenerator.cs` a way to
-  attribute their dependencies (native libraries, bundled assemblies) to the
-  resulting package first.
-- **The `rust/*` crates** are source only (`publish = false`, see above) and
-  are never vendored as compiled binaries into any NuGet package; they are
-  consumed by `cargo`, entirely outside the NuGet/CycloneDX pipeline.
-- **The `rust/package.ps1` output** (`Avalonia.Host` plus
-  its native dependencies and a Rust binary, per RID) is not a NuGet package
-  and is not produced by this repository's NuGet publish path -- it is a
-  standalone build artifact distributed by whatever channel a consumer of
-  this workflow chooses (for example a GitHub release). Its delivery scope is
-  covered by `sbom.cdx.json`, which inventories exact per-RID files after
-  signing, and by `checksums.sha256`, which covers that SBOM too. This does
-  not change the NuGet SBOM generator because no new packable NuGet project
-  or package delivery dependency is introduced.
-- **Stage 29 desktop file integration** adds only source files to the existing
-  non-packable `Avalonia.Host` and to the source-only `rust/*` crates, plus
-  template metadata snippets that are never compiled or copied into a delivered
-  bundle. No new shipped package, bundled third-party binary, npm/JS content,
-  or Numerge merge group is introduced, so neither `nukebuild/SbomGenerator.cs`
-  nor `rust/generate-sbom.ps1`'s delivery inventory changes.
+What Rustolonia does ship is the packaged NativeAOT bundle produced by
+[`package.ps1`](#deterministic-per-rid-artifact-layout) or `build-app.ps1`
+for an external consumer, and that delivery is what
+[`sbom.cdx.json`](#deterministic-per-rid-artifact-layout) inventories: every
+delivered file's SHA-256 hash, plus the resolved third-party NuGet package
+graph (from the host's already-restored `project.assets.json`) and Cargo
+crate graph (from `Cargo.lock`), each recorded as a CycloneDX component with
+a `purl`. This is a delivery-content and resolved-dependency-identity record,
+not a NuGet-package-level SBOM generator and not a vulnerability or
+license-compatibility scan; treat it as the inventory an EU CRA delivery
+process consumes, not as the whole of that process.
 
 ## Tests
 

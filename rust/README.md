@@ -102,7 +102,7 @@ To run an example:
 
 ```powershell
 $env:AVN_HOST_NATIVE_LIB = (Resolve-Path `
-  .\src\Avalonia.Host\bin\Release\net10.0\win-x64\publish\Avalonia.Host.dll)
+  .\host\bin\Release\net10.0\win-x64\publish\Avalonia.Host.dll)
 cargo run --manifest-path .\rust\Cargo.toml -p avalonia --example hello_world
 ```
 
@@ -177,7 +177,7 @@ dotnet run --project .\projection\Avalonia.ViewModelProjection.Tool -- `
 ```
 
 Public control coverage is declared in
-`src\Avalonia.Projection.Ir\AvaloniaProjectionProfiles.cs`. Unsupported
+`projection\Avalonia.Projection.Ir\AvaloniaProjectionProfiles.cs`. Unsupported
 members remain visible in `projection.ir.gaps.txt`. New samples must widen
 that shared policy and the generators when blocked; sample-specific host
 bindings are not accepted.
