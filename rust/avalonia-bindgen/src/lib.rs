@@ -1,3 +1,5 @@
+#[cfg(test)]
+mod abi_contract;
 mod emit;
 mod emit_safe;
 mod error;

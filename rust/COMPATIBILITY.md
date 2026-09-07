@@ -81,6 +81,33 @@ acceptable degradation.
 Any unavoidable incompatible ABI change requires a new host ABI generation and
 a coordinated major release.
 
+The frozen released C ABI snapshot is [`abi-baseline.json`](abi-baseline.json)
+(`kind: released`, schema version 3). It records producer pin, ABI typedef and
+macro expansions (`AvnHResult` → `int32_t`, `AVN_CALL` → `__stdcall` on
+Windows and empty elsewhere, struct packing default), interned callable slot
+templates, value-struct layouts, and flattened IR lineage fingerprints for each
+released identity. New current identities are allowed; the gate only requires
+every released IID to keep its contract. `projectionIrVersion` in the snapshot
+is provenance, not a live lock against `ProjectionIr.CurrentVersion`.
+
+The pointer spelling in a slot (`const T*`, `T**`) is indirection and
+constness only. It does not encode COM lifetime, free-ownership, or
+allocator contracts; those remain outside this gate. Duplicate value-type
+records, duplicate IIDs, and IID-constant/vtable-name mismatches fail closed
+instead of associating the next marker.
+
+The current header plus IR are an appendable inventory. Changing a resolved
+typedef/macro, a parameter type, a flattened IR kind/direction/nullability
+including inherited members, a value-struct layout, `abiVersion`, or name
+under an unchanged IID is a break.
+
+Intentional ABI-generation transitions retire identities instead of reusing
+them: add the old IID to `retiredIdentities` with the replacement name/reason,
+publish the successor under a new IID, and never reuse the retired GUID.
+Missing a retired IID is expected; seeing it again on a live interface is a
+reuse break. Update the released snapshot in the same change that adds a new
+identity or completes a documented retirement.
+
 The generated object model (`IAvnControl` and friends) is versioned by the
 `abiVersion` recorded per interface in `projection.ir.json`, which is hashed
 into the IID. Nano-COM vtables are flattened, so allowlisting a member on a base
