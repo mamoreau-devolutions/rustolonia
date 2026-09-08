@@ -9,7 +9,11 @@
     "presentationProject": { "type": "string", "minLength": 1 },
     "viewModelIr": { "type": "string", "minLength": 1 },
     "generatedAdaptersDirectory": { "type": "string", "minLength": 1 },
-    "generatedRegistryFile": { "type": "string", "minLength": 1 },
+    "generatedRegistryFile": {
+      "type": "string",
+      "pattern": "(^|[/\\\\])RustViewRegistry\\.g\\.cs$",
+      "description": "Output path for the generated registry; the filename must be RustViewRegistry.g.cs."
+    },
     "generatedRustFile": { "type": "string", "minLength": 1 },
     "generatedContractFile": { "type": "string", "minLength": 1 },
     "cargoManifest": { "type": "string", "minLength": 1 },

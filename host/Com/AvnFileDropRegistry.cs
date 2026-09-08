@@ -26,6 +26,7 @@ namespace Avalonia.Host.Com;
 internal sealed class AvnFileDropRegistry
 {
     private readonly Dictionary<long, Subscription> _subscriptions = new();
+    private readonly Dictionary<Control, DropState> _targets = new();
     private long _nextSubscriptionId;
 
     public int Subscribe(
@@ -38,6 +39,13 @@ internal sealed class AvnFileDropRegistry
         Dispatcher.UIThread.VerifyAccess();
 
         var id = Interlocked.Increment(ref _nextSubscriptionId);
+        if (!_targets.TryGetValue(target, out var state))
+        {
+            state = new DropState(DragDrop.GetAllowDrop(target));
+            _targets.Add(target, state);
+            DragDrop.SetAllowDrop(target, true);
+        }
+        state.Count++;
         var subscription = new Subscription(id, target, acceptedEffects, handler);
         _subscriptions.Add(id, subscription);
         subscription.Attach();
@@ -51,14 +59,35 @@ internal sealed class AvnFileDropRegistry
         if (!_subscriptions.Remove(subscriptionId, out var subscription))
             return HResults.E_INVALIDARG;
         subscription.Detach();
+        ReleaseTarget(subscription.Target);
         return HResults.S_OK;
     }
 
     public void Clear()
     {
+        Dispatcher.UIThread.VerifyAccess();
         foreach (var subscription in _subscriptions.Values)
+        {
             subscription.Detach();
+            ReleaseTarget(subscription.Target);
+        }
         _subscriptions.Clear();
+    }
+
+    private void ReleaseTarget(Control target)
+    {
+        var state = _targets[target];
+        if (--state.Count == 0)
+        {
+            _targets.Remove(target);
+            DragDrop.SetAllowDrop(target, state.PreviousAllowDrop);
+        }
+    }
+
+    private sealed class DropState(bool previousAllowDrop)
+    {
+        public readonly bool PreviousAllowDrop = previousAllowDrop;
+        public int Count;
     }
 
     private sealed class Subscription
@@ -71,7 +100,7 @@ internal sealed class AvnFileDropRegistry
         private readonly EventHandler<DragEventArgs> _onOver;
         private readonly EventHandler<DragEventArgs> _onLeave;
         private readonly EventHandler<DragEventArgs> _onDrop;
-        private readonly bool _previousAllowDrop;
+        public Control Target => _target;
         private IDataTransfer? _payloadSource;
         private IReadOnlyList<StorageItemSnapshot> _payload = Array.Empty<StorageItemSnapshot>();
         private bool _attached;
@@ -86,7 +115,6 @@ internal sealed class AvnFileDropRegistry
             _target = target;
             _acceptedEffects = acceptedEffects;
             _handler = handler;
-            _previousAllowDrop = DragDrop.GetAllowDrop(target);
             _onEnter = (_, e) => Handle(DesktopDropEventKind.Enter, e);
             _onOver = (_, e) => Handle(DesktopDropEventKind.Over, e);
             _onLeave = (_, e) => Handle(DesktopDropEventKind.Leave, e);
@@ -95,7 +123,6 @@ internal sealed class AvnFileDropRegistry
 
         public void Attach()
         {
-            DragDrop.SetAllowDrop(_target, true);
             _target.AddHandler(DragDrop.DragEnterEvent, _onEnter);
             _target.AddHandler(DragDrop.DragOverEvent, _onOver);
             _target.AddHandler(DragDrop.DragLeaveEvent, _onLeave);
@@ -113,7 +140,6 @@ internal sealed class AvnFileDropRegistry
             _target.RemoveHandler(DragDrop.DragOverEvent, _onOver);
             _target.RemoveHandler(DragDrop.DragLeaveEvent, _onLeave);
             _target.RemoveHandler(DragDrop.DropEvent, _onDrop);
-            DragDrop.SetAllowDrop(_target, _previousAllowDrop);
         }
 
         private void Handle(DesktopDropEventKind kind, DragEventArgs e)

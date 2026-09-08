@@ -139,6 +139,10 @@ jobs:
         shell: pwsh
         run: ./rust/tests/test-build-app.ps1 -RunNativeSmoke
 
+      - name: Run patched Avalonia control regressions
+        shell: pwsh
+        run: dotnet test avalonia-src/tests/Avalonia.Controls.UnitTests/Avalonia.Controls.UnitTests.csproj -c Release --framework net10.0 -- --filter-method '*TableViewRowAutomationPeerTests.*' '*TableViewColumnWidthLimitTests.*' '*TableViewTests.Fixed_height_table_virtualizes_a_100000_item_source_when_scrolling' --minimum-expected-tests 13
+
       - name: Build and launch a fresh external consumer under Xvfb
         if: runner.os == 'Linux'
         shell: bash
@@ -160,10 +164,31 @@ jobs:
         shell: pwsh
         run: ./rust/package.ps1 -Rid ${{ matrix.rid }} -Configuration Release -Example rust_vm_axaml -PresentationProject samples/RustViewModelSample.Managed/RustViewModelSample.Managed.csproj -ViewRegistryFile samples/RustViewModelSample.Managed/Generated/RustViewRegistry.g.cs
 
-      - name: Verify package checksums
+      - name: Archive complete bundle with file modes
+        shell: pwsh
+        run: tar -czf "rust/artifacts/${{ matrix.rid }}.tar.gz" -C "rust/artifacts/${{ matrix.rid }}" .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: avalonia-rust-native-${{ matrix.rid }}
+          path: rust/artifacts/${{ matrix.rid }}.tar.gz
+          if-no-files-found: error
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: avalonia-rust-native-${{ matrix.rid }}
+          path: rust/downloaded
+
+      - name: Extract downloaded bundle
         shell: pwsh
         run: |
-          $package = Join-Path 'rust' 'artifacts' '${{ matrix.rid }}'
+          New-Item -ItemType Directory -Path "rust/downloaded/${{ matrix.rid }}" | Out-Null
+          tar -xzf "rust/downloaded/${{ matrix.rid }}.tar.gz" -C "rust/downloaded/${{ matrix.rid }}"
+
+      - name: Verify downloaded package checksums
+        shell: pwsh
+        run: |
+          $package = Join-Path 'rust' 'downloaded' '${{ matrix.rid }}'
           Get-Content (Join-Path $package 'checksums.sha256') | ForEach-Object {
             $expected, $file = $_ -split '\s+\*', 2
             if ((Get-FileHash (Join-Path $package $file) -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) {
@@ -175,7 +200,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $process = Start-Process "./rust/artifacts/${{ matrix.rid }}/rust_vm_axaml.exe" -PassThru
+          $process = Start-Process "./rust/downloaded/${{ matrix.rid }}/rust_vm_axaml.exe" -PassThru
           Start-Sleep -Seconds 5
           if ($process.HasExited) { throw "Packaged sample exited during startup." }
           Stop-Process -Id $process.Id
@@ -184,7 +209,7 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          xvfb-run -a ./rust/artifacts/${{ matrix.rid }}/rust_vm_axaml &
+          xvfb-run -a ./rust/downloaded/${{ matrix.rid }}/rust_vm_axaml &
           process=$!
           sleep 5
           kill -0 "$process"
@@ -195,18 +220,12 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          ./rust/artifacts/${{ matrix.rid }}/rust_vm_axaml &
+          ./rust/downloaded/${{ matrix.rid }}/rust_vm_axaml &
           process=$!
           sleep 5
           kill -0 "$process"
           kill "$process"
           wait "$process" || true
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: avalonia-rust-native-${{ matrix.rid }}
-          path: rust/artifacts/${{ matrix.rid }}
-          if-no-files-found: error
 
   cross-build:
     name: cross-build (${{ matrix.rid }})
@@ -284,19 +303,40 @@ jobs:
         shell: pwsh
         run: ./rust/package.ps1 -Rid ${{ matrix.rid }} -Configuration Release -Example rust_vm_axaml -PresentationProject samples/RustViewModelSample.Managed/RustViewModelSample.Managed.csproj -ViewRegistryFile samples/RustViewModelSample.Managed/Generated/RustViewRegistry.g.cs
 
-      - name: Verify package checksums
+      - name: Archive complete bundle with file modes
+        shell: pwsh
+        run: tar -czf "rust/artifacts/${{ matrix.rid }}.tar.gz" -C "rust/artifacts/${{ matrix.rid }}" .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: avalonia-rust-cross-${{ matrix.rid }}
+          path: rust/artifacts/${{ matrix.rid }}.tar.gz
+          if-no-files-found: error
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: avalonia-rust-cross-${{ matrix.rid }}
+          path: rust/downloaded
+
+      - name: Extract downloaded bundle
         shell: pwsh
         run: |
-          $package = Join-Path 'rust' 'artifacts' '${{ matrix.rid }}'
+          New-Item -ItemType Directory -Path "rust/downloaded/${{ matrix.rid }}" | Out-Null
+          tar -xzf "rust/downloaded/${{ matrix.rid }}.tar.gz" -C "rust/downloaded/${{ matrix.rid }}"
+
+      - name: Verify downloaded cross-package checksums and modes
+        shell: pwsh
+        run: |
+          $package = Join-Path 'rust' 'downloaded' '${{ matrix.rid }}'
           Get-Content (Join-Path $package 'checksums.sha256') | ForEach-Object {
             $expected, $file = $_ -split '\s+\*', 2
             if ((Get-FileHash (Join-Path $package $file) -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) {
               throw "Checksum mismatch for $file"
             }
           }
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: avalonia-rust-cross-${{ matrix.rid }}
-          path: rust/artifacts/${{ matrix.rid }}
-          if-no-files-found: error
+          if (-not $IsWindows) {
+            $mode = [IO.File]::GetUnixFileMode((Join-Path $package 'rust_vm_axaml'))
+            if (-not ($mode -band [IO.UnixFileMode]::UserExecute)) {
+              throw 'Downloaded cross-package executable lost its execute permission.'
+            }
+          }

@@ -220,6 +220,95 @@ Add-Content -LiteralPath (Join-Path $PSScriptRoot 'signatures.log') -Value $Arti
     Assert-Throws { Invoke-ArtifactSigning -ArtifactDirectory $signingRoot -SignCommand $signerScript -ExplicitFiles @('missing-app') } 'missing'
     Assert-True (@(Get-Content -LiteralPath $signLog).Count -eq 3) 'Missing signing inputs must fail before signing anything.'
 
+    $transactionBundle = Join-Path $scratch 'transaction bundle'
+    Prepare-ArtifactBundle -BundlePath $transactionBundle | Out-Null
+    Set-Content -LiteralPath (Join-Path $transactionBundle 'old.bin') -Value 'last good package'
+    Write-Checksums -Bundle $transactionBundle
+    $originalChecksums = Get-Content -LiteralPath (Join-Path $transactionBundle 'checksums.sha256') -Raw
+    foreach ($stage in @('cargo', 'signing', 'sbom', 'checksums')) {
+        Assert-Throws {
+            Invoke-ArtifactBundleTransaction -BundlePath $transactionBundle -Rid win-x64 -Build {
+                param($workingBundle)
+                Set-Content -LiteralPath (Join-Path $workingBundle 'new.bin') -Value 'incomplete replacement'
+                throw "$stage failed"
+            }
+        } "$stage failed"
+        Assert-True ((Get-Content -LiteralPath (Join-Path $transactionBundle 'checksums.sha256') -Raw) -eq $originalChecksums) "$stage failure changed the old package."
+        Assert-True ((Get-Content -LiteralPath (Join-Path $transactionBundle 'old.bin') -Raw).Trim() -eq 'last good package') "$stage failure lost the old binary."
+        Assert-True (-not (Test-Path -LiteralPath (Join-Path $transactionBundle 'new.bin'))) 'Partial bundles must not be published.'
+    }
+    & {
+        function Move-ArtifactBundleDirectory {
+            param([string]$LiteralPath, [string]$Destination)
+            if ((Split-Path -Leaf $LiteralPath) -eq 'bundle') { throw 'simulated replacement failure' }
+            [IO.Directory]::Move($LiteralPath, $Destination)
+        }
+        Assert-Throws {
+            Invoke-ArtifactBundleTransaction -BundlePath $transactionBundle -Rid win-x64 -Build {
+                param($workingBundle)
+                Set-Content -LiteralPath (Join-Path $workingBundle 'new.bin') -Value 'replacement'
+            }
+        } 'simulated replacement failure'
+    }
+    Assert-True (Test-Path -LiteralPath (Join-Path $transactionBundle 'old.bin')) 'Failed replacement must restore the previous bundle.'
+    Assert-Throws {
+        Invoke-ArtifactBundleTransaction -BundlePath $protectedBundle -Rid win-x64 -Build { throw 'must not build' }
+    } 'Refusing'
+    Invoke-ArtifactBundleTransaction -BundlePath $transactionBundle -Rid win-x64 -Build {
+        param($workingBundle)
+        Assert-True (Test-Path -LiteralPath (Join-Path $transactionBundle 'old.bin')) 'Previous bundle must remain available while building.'
+        Set-Content -LiteralPath (Join-Path $workingBundle 'new.bin') -Value 'complete replacement'
+        Write-Checksums -Bundle $workingBundle
+    }
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $transactionBundle 'old.bin'))) 'Successful replacement must remove stale outputs.'
+    Assert-True (Test-Path -LiteralPath (Join-Path $transactionBundle 'new.bin')) 'Successful replacement must publish the new bundle.'
+    Assert-True (@(Get-ChildItem -LiteralPath $scratch -Force -Filter '.win-x64.avalonia-staging.*').Count -eq 2) 'Transactions must clean their own staging without removing other invocations.'
+    $uncreatedBundle = Join-Path $scratch 'uncreated bundle'
+    Assert-Throws {
+        Invoke-ArtifactBundleTransaction -BundlePath $uncreatedBundle -Rid win-x64 -Build { throw 'first build failed' }
+    } 'first build failed'
+    Assert-True (-not (Test-Path -LiteralPath $uncreatedBundle)) 'A failed first build must not expose a partial bundle.'
+
+    $racedBundle = Join-Path $scratch 'raced bundle'
+    Prepare-ArtifactBundle -BundlePath $racedBundle | Out-Null
+    Set-Content -LiteralPath (Join-Path $racedBundle 'old.bin') -Value 'preserve on rollback failure'
+    & {
+        function Move-ArtifactBundleDirectory {
+            param([string]$LiteralPath, [string]$Destination)
+            if ((Split-Path -Leaf $LiteralPath) -eq 'bundle') {
+                New-Item -ItemType Directory -Path $Destination | Out-Null
+                Set-Content -LiteralPath (Join-Path $Destination 'user.data') -Value 'concurrent directory'
+            }
+            [IO.Directory]::Move($LiteralPath, $Destination)
+        }
+        Assert-Throws {
+            Invoke-ArtifactBundleTransaction -BundlePath $racedBundle -Rid win-x64 -Build {} 3>$null
+        } 'already exists|already in use'
+    }
+    Assert-True (Test-Path -LiteralPath (Join-Path $racedBundle 'user.data')) 'A replacement race must not overwrite concurrent user data.'
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $racedBundle 'bundle'))) 'A replacement race must not nest the staged bundle.'
+    $retained = @(Get-ChildItem -LiteralPath $scratch -Directory -Force -Filter '.win-x64.avalonia-staging.*' |
+        Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'previous' 'old.bin') })
+    Assert-True ($retained.Count -eq 1) 'A rollback failure must retain the previous package for recovery.'
+    Remove-Item -LiteralPath $retained[0].FullName -Recurse -Force
+
+    $archive = Join-Path $scratch 'package.tar.gz'
+    $downloadedBundle = Join-Path $scratch 'downloaded bundle'
+    New-Item -ItemType Directory -Path $downloadedBundle | Out-Null
+    if (-not $IsWindows) {
+        [IO.File]::SetUnixFileMode((Join-Path $transactionBundle 'new.bin'), [IO.UnixFileMode]'UserRead,UserWrite,UserExecute,GroupRead,GroupExecute,OtherRead,OtherExecute')
+    }
+    tar -czf $archive -C $transactionBundle .
+    tar -xzf $archive -C $downloadedBundle
+    Assert-True (Test-Path -LiteralPath (Join-Path $downloadedBundle '.rustolonia-bundle-owner')) 'Archive roundtrip must preserve the hidden ownership marker.'
+    foreach ($line in Get-Content -LiteralPath (Join-Path $downloadedBundle 'checksums.sha256')) {
+        $expected, $file = $line -split '\s+\*', 2
+        Assert-True ((Get-FileHash -LiteralPath (Join-Path $downloadedBundle $file) -Algorithm SHA256).Hash.ToLowerInvariant() -eq $expected) "Archive checksum mismatch for $file."
+    }
+    if (-not $IsWindows) {
+        Assert-True ([IO.File]::GetUnixFileMode((Join-Path $downloadedBundle 'new.bin')) -eq [IO.File]::GetUnixFileMode((Join-Path $transactionBundle 'new.bin'))) 'Archive roundtrip must preserve executable permissions.'
+    }
+
     $consumer = Join-Path $scratch 'external app directory' 'My App'
     $scriptOutput = & (Join-Path $root 'rust' 'new-app.ps1') -Name demo_app -Destination $consumer -ProducerRoot $fakeProducer -RustoloniaRoot $root 6>&1
     $scriptText = $scriptOutput | Out-String
@@ -264,7 +353,9 @@ Add-Content -LiteralPath (Join-Path $PSScriptRoot 'signatures.log') -Value $Arti
         @{ Field = 'rid'; Value = 'WIN-X64' },
         @{ Field = 'rid'; Value = @('win-x64') },
         @{ Field = 'configuration'; Value = 'release' },
-        @{ Field = 'configuration'; Value = @('Release') }
+        @{ Field = 'configuration'; Value = @('Release') },
+        @{ Field = 'generatedRegistryFile'; Value = 'generated/CustomRegistry.g.cs' },
+        @{ Field = 'generatedRegistryFile'; Value = 'generated/rustviewregistry.g.cs' }
     )
     foreach ($field in @('presentationProject', 'viewModelIr', 'generatedAdaptersDirectory', 'generatedRegistryFile', 'generatedRustFile', 'generatedContractFile', 'cargoManifest', 'outputDirectory')) {
         foreach ($value in @($null, '', 123, @('path'), @{ path = 'value' })) {
@@ -278,6 +369,101 @@ Add-Content -LiteralPath (Join-Path $PSScriptRoot 'signatures.log') -Value $Arti
         Assert-Throws { & (Join-Path $root 'rust' 'build-app.ps1') -ProducerRoot $fakeProducer -Manifest $badManifestPath } "Invalid consumer manifest: $($case.Field)"
     }
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $consumer '.avalonia'))) 'Invalid manifests must not create build outputs.'
+
+    & {
+        $nativeOs = if ($IsWindows) { 'win' } elseif ($IsLinux) { 'linux' } else { 'osx' }
+        $nativeRid = "$nativeOs-$(Get-CurrentRuntimeArchitecture)"
+        $nativeTarget = Get-RidTargetInfo -Rid $nativeRid
+        $mockArtifacts = Join-Path $scratch 'mock dotnet artifacts'
+        $mockAssets = Join-Path $scratch 'mock.assets.json'
+        Set-Content -LiteralPath $mockAssets -Value '{"libraries":{}}'
+        Set-Content -LiteralPath (Join-Path $fakeProducer 'licence.md') -Value 'producer license'
+        $dbusDirectory = Join-Path $fakeProducer 'external' 'Avalonia.DBus' 'src' 'Avalonia.DBus'
+        New-Item -ItemType Directory -Force -Path $dbusDirectory | Out-Null
+        Set-Content -LiteralPath (Join-Path $dbusDirectory 'Avalonia.DBus.csproj') -Value '<Project />'
+        $failingSigner = Join-Path $scratch 'failing-sign.ps1'
+        Set-Content -LiteralPath $failingSigner -Value "throw 'injected signing failure'"
+        function rustup { $nativeTarget.Triple }
+        function xcodebuild {}
+        function git { 'deadbeef' }
+        function dotnet {
+            $global:LASTEXITCODE = 0
+            if ($args -contains '-getProperty:ProjectAssetsFile') { return $mockAssets }
+            if ($args[0] -ne 'publish') { return }
+            $publishOverride = @($args | Where-Object { $_ -like '-p:PublishDir=*' })
+            $publish = if ($publishOverride.Count) { $publishOverride[0].Substring('-p:PublishDir='.Length) }
+                else { Join-Path $mockArtifacts 'publish' 'Avalonia.Host' "release_$nativeRid" }
+            New-Item -ItemType Directory -Force -Path $publish | Out-Null
+            Set-Content -LiteralPath (Join-Path $publish "Avalonia.Host$($nativeTarget.HostExtension)") -Value 'new host'
+            if ($IsMacOS) { Set-Content -LiteralPath (Join-Path $publish 'libAvaloniaNative.dylib') -Value 'native library' }
+        }
+        function cargo {
+            $global:LASTEXITCODE = 0
+            if ($args[0] -eq 'fmt') { return }
+            if ($failureStage -eq 'cargo') { throw 'injected cargo failure' }
+            $output = Join-Path $env:CARGO_TARGET_DIR $nativeTarget.Triple 'release'
+            $name = 'demo_app'
+            if ($args -contains '--example') {
+                $output = Join-Path $output 'examples'
+                $name = 'hello_world'
+            }
+            New-Item -ItemType Directory -Force -Path $output | Out-Null
+            Set-Content -LiteralPath (Join-Path $output "$name$($nativeTarget.ExeExtension)") -Value 'new executable'
+        }
+        $savedEnvironment = @{}
+        foreach ($key in @('AVN_DOTNET_ARTIFACTS', 'CARGO_TARGET_DIR', 'AVALONIA_RUST_SIGN_COMMAND', 'AVN_PACKAGE_SKIP_CARGO_BUILD')) {
+            $savedEnvironment[$key] = [Environment]::GetEnvironmentVariable($key, 'Process')
+        }
+        try {
+            $env:AVN_DOTNET_ARTIFACTS = $mockArtifacts
+            $env:CARGO_TARGET_DIR = Join-Path $scratch 'mock cargo artifacts'
+            $env:AVALONIA_RUST_SIGN_COMMAND = $failingSigner
+            Remove-Item Env:AVN_PACKAGE_SKIP_CARGO_BUILD -ErrorAction SilentlyContinue
+            $sampleOutput = Join-Path $scratch 'sample package output'
+            $sampleBundle = Join-Path $sampleOutput $nativeRid
+            $consumerBundle = Join-Path $consumer 'package output'
+            foreach ($output in @($sampleBundle, $consumerBundle)) {
+                Prepare-ArtifactBundle -BundlePath $output | Out-Null
+                Set-Content -LiteralPath (Join-Path $output 'previous.bin') -Value 'last good release'
+            }
+            $mockManifest = Get-Content -LiteralPath (Join-Path $consumer 'avalonia-app.json') -Raw | ConvertFrom-Json -AsHashtable
+            $mockManifest.rid = $nativeRid
+            $mockManifest.configuration = 'Release'
+            $mockManifest.outputDirectory = $consumerBundle
+            $mockManifestPath = Join-Path $consumer 'mock-build.json'
+            $mockManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $mockManifestPath
+            foreach ($failureStage in @('cargo', 'signing')) {
+                Assert-Throws {
+                    & (Join-Path $root 'rust' 'package.ps1') -Rid $nativeRid -ProducerRoot $fakeProducer -OutputRoot $sampleOutput
+                } "injected $failureStage failure"
+                Assert-Throws {
+                    & (Join-Path $root 'rust' 'build-app.ps1') -ProducerRoot $fakeProducer -Manifest $mockManifestPath -SkipGenerate
+                } "injected $failureStage failure"
+                foreach ($output in @($sampleBundle, $consumerBundle)) {
+                    Assert-True ((Get-Content -LiteralPath (Join-Path $output 'previous.bin') -Raw).Trim() -eq 'last good release') "$failureStage failure in a packaging entry point lost the previous bundle."
+                    Assert-True (@(Get-ChildItem -LiteralPath $output -Force).Count -eq 2) 'A failed packaging entry point exposed partial output.'
+                }
+            }
+            $failureStage = 'none'
+            Remove-Item Env:AVALONIA_RUST_SIGN_COMMAND
+            & (Join-Path $root 'rust' 'package.ps1') -Rid $nativeRid -ProducerRoot $fakeProducer -OutputRoot $sampleOutput
+            & (Join-Path $root 'rust' 'build-app.ps1') -ProducerRoot $fakeProducer -Manifest $mockManifestPath -SkipGenerate
+            foreach ($output in @($sampleBundle, $consumerBundle)) {
+                Assert-True (-not (Test-Path -LiteralPath (Join-Path $output 'previous.bin'))) 'Successful entry points must replace stale bundles.'
+                Assert-True (Test-Path -LiteralPath (Join-Path $output 'sbom.cdx.json')) 'Successful entry points must publish an SBOM.'
+                foreach ($line in Get-Content -LiteralPath (Join-Path $output 'checksums.sha256')) {
+                    $expected, $file = $line -split '\s+\*', 2
+                    Assert-True ((Get-FileHash -LiteralPath (Join-Path $output $file) -Algorithm SHA256).Hash.ToLowerInvariant() -eq $expected) "Published checksum mismatch for $file."
+                }
+            }
+        }
+        finally {
+            foreach ($key in $savedEnvironment.Keys) {
+                if ($null -eq $savedEnvironment[$key]) { Remove-Item "Env:$key" -ErrorAction SilentlyContinue }
+                else { [Environment]::SetEnvironmentVariable($key, $savedEnvironment[$key], 'Process') }
+            }
+        }
+    }
 
     $inventory = Join-Path $scratch 'inventory'
     New-Item -ItemType Directory -Path $inventory | Out-Null

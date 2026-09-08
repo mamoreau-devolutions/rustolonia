@@ -776,6 +776,12 @@ fn emit_method(ty: &ProjectedType, method: &crate::ir::ProjectedMethod) -> Strin
                 }
             } else if parameter.kind == "Variant" {
                 format!("{parameter_name}: impl Into<Variant>")
+            } else if parameter.kind == "StringUtf16" {
+                if parameter.is_nullable {
+                    format!("{parameter_name}: Option<&str>")
+                } else {
+                    format!("{parameter_name}: impl AsRef<str>")
+                }
             } else if let Some(geometry) = geometry::find(&parameter.kind) {
                 format!("{parameter_name}: {}", geometry.safe_name)
             } else {
@@ -786,10 +792,16 @@ fn emit_method(ty: &ProjectedType, method: &crate::ir::ProjectedMethod) -> Strin
         .join(", ");
     let setup = ins
         .iter()
-        .filter(|parameter| is_any_control(parameter))
+        .filter(|parameter| is_any_control(parameter) || parameter.kind == "StringUtf16")
         .map(|parameter| {
             let parameter_name = to_snake(&parameter.name);
-            if parameter.is_nullable {
+            if parameter.kind == "StringUtf16" {
+                if parameter.is_nullable {
+                    format!("        let {parameter_name}: Option<Vec<u16>> = {parameter_name}.map(|value| value.encode_utf16().chain(Some(0)).collect());\n")
+                } else {
+                    format!("        let {parameter_name}: Vec<u16> = {parameter_name}.as_ref().encode_utf16().chain(Some(0)).collect();\n")
+                }
+            } else if parameter.is_nullable {
                 format!(
                     "        let {parameter_name} = {parameter_name}.map(|value| value.as_control()).transpose()?;\n"
                 )
@@ -816,6 +828,12 @@ fn emit_method(ty: &ProjectedType, method: &crate::ir::ProjectedMethod) -> Strin
                 }
             } else if parameter.kind == "Notification" {
                 format!("{parameter_name}")
+            } else if parameter.kind == "StringUtf16" {
+                if parameter.is_nullable {
+                    format!("{parameter_name}.as_deref()")
+                } else {
+                    format!("&{parameter_name}")
+                }
             } else if parameter.kind == "Variant" {
                 format!("*{parameter_name}.into().to_abi()?")
             } else if geometry::is_geometry(&parameter.kind) {
@@ -914,24 +932,30 @@ fn safe_property_input(
                 property.interface_name.as_deref().expect("interfaceName"),
             ));
             if safe == "Control" {
+                if property.is_nullable {
+                    return (
+                        "Option<&dyn AsControl>".into(),
+                        "        let value = value.map(|value| value.as_control()).transpose()?;\n".into(),
+                        "value.as_ref()".into(),
+                    );
+                }
                 (
                     "impl AsControl".into(),
                     "        let value = value.as_control()?;\n".into(),
-                    if property.is_nullable {
-                        "Some(&value)".into()
-                    } else {
-                        "&value".into()
-                    },
+                    "&value".into(),
                 )
             } else {
+                if property.is_nullable {
+                    return (
+                        format!("Option<&{safe}>"),
+                        String::new(),
+                        "value.map(|value| &value.raw)".into(),
+                    );
+                }
                 (
                     format!("&{safe}"),
                     String::new(),
-                    if property.is_nullable {
-                        "Some(&value.raw)".into()
-                    } else {
-                        "&value.raw".into()
-                    },
+                    "&value.raw".into(),
                 )
             }
         }
@@ -1095,6 +1119,84 @@ fn interface_suffix(name: &str) -> &str {
 
 fn simple_name(full_name: &str) -> &str {
     full_name.rsplit('.').next().unwrap_or(full_name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{fs, path::PathBuf, process::Command, time::SystemTime};
+
+    #[test]
+    fn safe_string_methods_and_interface_setters_compile_and_preserve_nulls() {
+        let ty: ProjectedType = serde_json::from_value(serde_json::json!({
+            "name": "IAvnFixture", "fullName": "Tests.IAvnFixture", "kind": "Class",
+            "methods": [{
+                "name": "WriteStrings", "returnKind": "I32", "preserveSig": true,
+                "parameters": [
+                    { "name": "required", "kind": "StringUtf16", "direction": "In" },
+                    { "name": "optional", "kind": "StringUtf16", "direction": "In", "isNullable": true }
+                ]
+            }]
+        }))
+        .unwrap();
+        let mut members = emit_method(&ty, &ty.methods[0]);
+        for (name, interface, nullable) in [
+            ("RequiredControl", "IAvnControl", false),
+            ("OptionalControl", "IAvnControl", true),
+            ("RequiredSpecific", "IAvnSpecific", false),
+            ("OptionalSpecific", "IAvnSpecific", true),
+        ] {
+            let property: ProjectedProperty = serde_json::from_value(serde_json::json!({
+                "name": name, "kind": "ComInterface", "interfaceName": interface,
+                "canWrite": true, "isNullable": nullable
+            }))
+            .unwrap();
+            members.push_str(&emit_property(
+                &property,
+                &Default::default(),
+                &Default::default(),
+            ));
+        }
+        let source = include_str!("../test-fixtures/safe_inputs.rs")
+            .replace("// GENERATED_MEMBERS", &members);
+        let stamp = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("target")
+            .join(format!("bindgen-compile-{}-{stamp}", std::process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        struct Cleanup(PathBuf);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let _ = fs::remove_dir_all(&self.0);
+            }
+        }
+        let _cleanup = Cleanup(directory.clone());
+        let source_path = directory.join("safe_inputs.rs");
+        let executable = directory.join(format!("safe_inputs{}", std::env::consts::EXE_SUFFIX));
+        fs::write(&source_path, source).unwrap();
+        let compiled = Command::new("rustc")
+            .args(["--edition=2021", "--crate-name", "safe_inputs"])
+            .arg(&source_path)
+            .arg("-o")
+            .arg(&executable)
+            .output()
+            .unwrap();
+        assert!(
+            compiled.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiled.stderr)
+        );
+        let executed = Command::new(executable).output().unwrap();
+        assert!(
+            executed.status.success(),
+            "{}",
+            String::from_utf8_lossy(&executed.stderr)
+        );
+    }
 }
 
 fn to_snake(name: &str) -> String {

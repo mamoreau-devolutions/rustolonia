@@ -40,6 +40,7 @@ var adapterDirectory = Path.GetFullPath(args[1]);
 var registryDirectory = Path.GetFullPath(args[2]);
 var rustPath = Path.GetFullPath(args[3]);
 var contractPath = Path.GetFullPath(args[4]);
+var outputDirectories = new[] { adapterDirectory, registryDirectory, Path.GetDirectoryName(rustPath)!, Path.GetDirectoryName(contractPath)! };
 
 var expectedFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 foreach (var (name, source) in ViewModelSourceEmitter.EmitCSharp(ir))
@@ -54,7 +55,7 @@ OwnedOutputs.Add(expectedFiles, contractPath, ViewModelSourceEmitter.EmitContrac
 
 if (checkMode)
 {
-    var result = OwnedOutputs.Check(OwnedOutputs.ViewModelGeneratorId, expectedFiles);
+    var result = OwnedOutputs.Check(OwnedOutputs.ViewModelGeneratorId, expectedFiles, outputDirectories);
     if (result.Success)
     {
         Console.WriteLine($"Generation check passed for {expectedFiles.Count} output file(s).");
@@ -66,7 +67,7 @@ if (checkMode)
     return 1;
 }
 
-OwnedOutputs.Write(OwnedOutputs.ViewModelGeneratorId, expectedFiles);
+OwnedOutputs.Write(OwnedOutputs.ViewModelGeneratorId, expectedFiles, outputDirectories);
 
 Console.WriteLine(
     $"Generated {ir.Models.Count} view model(s) and {ir.Views.Count} view(s).");

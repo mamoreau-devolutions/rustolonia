@@ -24,7 +24,7 @@ fn main() -> avalonia::Result<()> {
 
         let child_scope = scope.clone();
         let new_window = Button::new()?
-            .content(TextBlock::new()?.text("+")?)?
+            .content(Some(&TextBlock::new()?.text("+")?))?
             .on_click(scope, move |_| {
                 let text = editor_for_window
                     .get_text()
@@ -32,7 +32,7 @@ fn main() -> avalonia::Result<()> {
                     .unwrap_or_default();
                 Window::new()
                     .and_then(|window| window.title("Text Test App"))
-                    .and_then(|window| window.content(TextBlock::new()?.text(text)?))
+                    .and_then(|window| window.content(Some(&TextBlock::new()?.text(text)?)))
                     .and_then(|window| child_scope.mount(window))
                     .expect("failed to open text preview window");
             })?;
@@ -46,11 +46,11 @@ fn main() -> avalonia::Result<()> {
         DockPanel::set_dock(&toolbar, Dock::Top)?;
 
         scope.mount(
-            Window::new()?.title("Text Test App")?.content(
-                DockPanel::new()?
+            Window::new()?.title("Text Test App")?.content(Some(
+                &DockPanel::new()?
                     .child(toolbar)?
-                    .child(ScrollViewer::new()?.content(preview)?)?,
-            )?,
+                    .child(ScrollViewer::new()?.content(Some(&preview))?)?,
+            ))?,
         )
     })
 }

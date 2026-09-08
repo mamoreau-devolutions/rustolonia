@@ -59,7 +59,7 @@ fn explicitly_empty_startup_arguments_produce_no_activation_items() {
 
             let window = Window::new()?
                 .title("no activation")?
-                .content(TextBlock::new()?.text("no activation")?)?;
+                .content(Some(&TextBlock::new()?.text("no activation")?))?;
             scope.mount(window.clone())?;
             scope.post(move || window.close().expect("close the test window"))?;
             Ok(())

@@ -99,7 +99,7 @@ fn desktop_file_integration_runs_through_nativeaot() {
 
         let window = Window::new()?
             .title("desktop files")?
-            .content(TextBlock::new()?.text("desktop files")?)?;
+            .content(Some(&TextBlock::new()?.text("desktop files")?))?;
         scope.mount(window.clone())?;
 
         // Mounted windows are tracked so a Rust view model can parent a picker.

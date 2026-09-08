@@ -378,7 +378,7 @@ function Write-Checksums {
     [System.IO.File]::WriteAllLines((Join-Path $Bundle 'checksums.sha256'), $lines, [System.Text.UTF8Encoding]::new($false))
 }
 
-function Prepare-ArtifactBundle {
+function Assert-ArtifactBundleDestination {
     param(
         [Parameter(Mandatory)][string]$BundlePath
     )
@@ -391,6 +391,27 @@ function Prepare-ArtifactBundle {
         throw "Bundle path '$resolvedBundle' exists but is not a directory. Refusing to replace a file with a package bundle."
     }
 
+    if (-not (Test-Path -LiteralPath $resolvedBundle -PathType Container)) { return }
+    if ((Get-Item -LiteralPath $resolvedBundle -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        throw "Bundle directory '$resolvedBundle' is a link. Refusing to replace user data."
+    }
+    $ownerMarker = Join-Path $resolvedBundle '.rustolonia-bundle-owner'
+    if (Test-Path -LiteralPath $ownerMarker -PathType Leaf) {
+        if ((Get-Item -LiteralPath $ownerMarker -Force).Attributes -band [IO.FileAttributes]::ReparsePoint -or
+            (Get-Content -LiteralPath $ownerMarker -Raw).Trim() -ne 'Rustolonia-owned bundle marker') {
+            throw "Invalid bundle ownership marker in '$resolvedBundle'. Refusing to replace user data."
+        }
+    }
+    elseif (@(Get-ChildItem -LiteralPath $resolvedBundle -Force).Count -gt 0) {
+        throw "Bundle directory '$resolvedBundle' already exists and is not an empty or Rustolonia-owned package bundle. Refusing to replace user data."
+    }
+}
+
+function Prepare-ArtifactBundle {
+    param([Parameter(Mandatory)][string]$BundlePath)
+
+    $resolvedBundle = Resolve-CallerRelativePath -PathValue $BundlePath
+    Assert-ArtifactBundleDestination -BundlePath $resolvedBundle
     if (-not (Test-Path -LiteralPath $resolvedBundle -PathType Container)) {
         $parent = Split-Path -Parent $resolvedBundle
         if ($parent -and -not (Test-Path -LiteralPath $parent -PathType Container)) {
@@ -416,6 +437,60 @@ function Prepare-ArtifactBundle {
 
     Set-Content -LiteralPath $ownerMarker -Value 'Rustolonia-owned bundle marker' -Encoding utf8
     return $resolvedBundle
+}
+
+function Move-ArtifactBundleDirectory {
+    param(
+        [Parameter(Mandatory)][string]$LiteralPath,
+        [Parameter(Mandatory)][string]$Destination
+    )
+
+    # Unlike Move-Item, this cannot nest the bundle inside a concurrently created directory.
+    [IO.Directory]::Move($LiteralPath, $Destination)
+}
+
+function Invoke-ArtifactBundleTransaction {
+    param(
+        [Parameter(Mandatory)][string]$BundlePath,
+        [Parameter(Mandatory)][string]$Rid,
+        [Parameter(Mandatory)][scriptblock]$Build
+    )
+
+    $destination = Resolve-CallerRelativePath -PathValue $BundlePath
+    Assert-ArtifactBundleDestination -BundlePath $destination
+    $transactionRoot = New-IsolatedPackageStagingRoot -OutputRoot (Split-Path -Parent $destination) -Rid $Rid
+    $stagedBundle = Join-Path $transactionRoot 'bundle'
+    $backup = Join-Path $transactionRoot 'previous'
+    $retainBackup = $false
+    try {
+        Prepare-ArtifactBundle -BundlePath $stagedBundle | Out-Null
+        & $Build $stagedBundle
+        # Validate again before replacing: building/signing can take a long time.
+        Assert-ArtifactBundleDestination -BundlePath $destination
+        if (Test-Path -LiteralPath $destination) {
+            Move-ArtifactBundleDirectory -LiteralPath $destination -Destination $backup
+        }
+        try {
+            Move-ArtifactBundleDirectory -LiteralPath $stagedBundle -Destination $destination
+        }
+        catch {
+            if (Test-Path -LiteralPath $backup) {
+                $retainBackup = $true
+                Move-ArtifactBundleDirectory -LiteralPath $backup -Destination $destination
+                $retainBackup = $false
+            }
+            throw
+        }
+    }
+    finally {
+        # If rollback itself failed, retain the backup for manual recovery.
+        if ($retainBackup -or ((Test-Path -LiteralPath $backup) -and -not (Test-Path -LiteralPath $destination))) {
+            Write-Warning "Previous bundle retained for recovery at $backup"
+        }
+        elseif (Test-Path -LiteralPath $transactionRoot) {
+            Remove-Item -LiteralPath $transactionRoot -Recurse -Force
+        }
+    }
 }
 
 function Copy-BundleFiles {

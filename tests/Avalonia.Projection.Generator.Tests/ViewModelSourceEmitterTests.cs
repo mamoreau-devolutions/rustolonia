@@ -7,6 +7,37 @@ namespace Avalonia.Projection.Generator.Tests;
 
 public class ViewModelSourceEmitterTests
 {
+    [Theory]
+    [InlineData("SampleViewModelAdapter")]
+    [InlineData("sampleviewmodeladapter")]
+    [InlineData("SampleViewModelMetadata")]
+    [InlineData("CountToLabelConverter")]
+    [InlineData("RustViewRegistry")]
+    [InlineData("rustviewregistry")]
+    public void Rejects_colliding_complete_output_names(string enumName)
+    {
+        var ir = new ViewModelIr
+        {
+            Models = SampleModels(),
+            Views = SampleViews(),
+            Converters = SampleConverters(),
+            Enums =
+            [
+                new ViewModelEnumDefinition
+                {
+                    Id = 1,
+                    Name = enumName,
+                    ManagedNamespace = "Other.Namespace",
+                    Members = [new ViewModelEnumMember { Name = "Value", Value = 0 }],
+                },
+            ],
+        };
+
+        var error = Assert.Throws<InvalidOperationException>(() => ViewModelSourceEmitter.EmitCSharp(ir));
+        Assert.Contains("Duplicate generated output", error.Message, StringComparison.Ordinal);
+        Assert.Contains(".g.cs", error.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Emits_deterministic_csharp_rust_and_contract_output()
     {

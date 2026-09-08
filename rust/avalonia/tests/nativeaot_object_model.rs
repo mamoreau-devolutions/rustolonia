@@ -120,7 +120,7 @@ fn builders_create_a_real_window_through_nativeaot() {
             scope.find_resource("__missing_rust_resource__", ThemeVariant::Dark)?,
             None
         );
-        let button = Button::new()?.content(TextBlock::new()?.text("Close")?)?;
+        let button = Button::new()?.content(Some(&TextBlock::new()?.text("Close")?))?;
         let classes = button.classes()?;
         classes.add("primary")?;
         assert!(classes.contains("primary")?);
@@ -172,12 +172,12 @@ fn builders_create_a_real_window_through_nativeaot() {
         DockPanel::set_dock(&text_box, Dock::Top)?;
         assert_eq!(DockPanel::get_dock(&text_box)?, Dock::Top);
         let text_box_for_post = text_box.clone();
-        let text_box = ScrollViewer::new()?.content(DockPanel::new()?.child(text_box)?)?;
+        let text_box = ScrollViewer::new()?.content(Some(&DockPanel::new()?.child(text_box)?))?;
 
         let toggle = ToggleSwitch::new()?
-            .content(TextBlock::new()?.text("ToggleSwitch")?)?
-            .on_content(TextBlock::new()?.text("On")?)?
-            .off_content(TextBlock::new()?.text("Off")?)?
+            .content(Some(&TextBlock::new()?.text("ToggleSwitch")?))?
+            .on_content(Some(&TextBlock::new()?.text("On")?))?
+            .off_content(Some(&TextBlock::new()?.text("Off")?))?
             .checked(Some(true))?
             .three_state(true)?
             .on_is_checked_changed(scope, move |_| {
@@ -188,18 +188,18 @@ fn builders_create_a_real_window_through_nativeaot() {
 
         let radio_one = RadioButton::new()?
             .group_name("TestGroup")?
-            .content(TextBlock::new()?.text("One")?)?
+            .content(Some(&TextBlock::new()?.text("One")?))?
             .checked(Some(true))?;
         let radio_two = RadioButton::new()?
             .group_name("TestGroup")?
-            .content(TextBlock::new()?.text("Two")?)?;
+            .content(Some(&TextBlock::new()?.text("Two")?))?;
         let radio_one_for_post = radio_one.clone();
         let radio_two_for_post = radio_two.clone();
         let radio_buttons = StackPanel::new()?.child(radio_one)?.child(radio_two)?;
 
         let expander = Expander::new()?
-            .header(TextBlock::new()?.text("Header")?)?
-            .content(TextBlock::new()?.text("Content")?)?
+            .header(Some(&TextBlock::new()?.text("Header")?))?
+            .content(Some(&TextBlock::new()?.text("Content")?))?
             .expand_direction(ExpandDirection::Down)?
             .expanded(true)?;
         assert_eq!(expander.get_expand_direction()?, ExpandDirection::Down);
@@ -209,8 +209,8 @@ fn builders_create_a_real_window_through_nativeaot() {
         let combo_box = ComboBox::new()?
             .placeholder_text("Pick")?
             .max_drop_down_height(240.0)?
-            .item(ComboBoxItem::new()?.content(TextBlock::new()?.text("First")?)?)?
-            .item(ComboBoxItem::new()?.content(TextBlock::new()?.text("Second")?)?)?
+            .item(ComboBoxItem::new()?.content(Some(&TextBlock::new()?.text("First")?))?)?
+            .item(ComboBoxItem::new()?.content(Some(&TextBlock::new()?.text("Second")?))?)?
             .on_selection_changed(scope, move |_| {
                 combo_changed_from_handler.store(true, Ordering::SeqCst);
             })?;
@@ -222,8 +222,8 @@ fn builders_create_a_real_window_through_nativeaot() {
 
         let list_box = ListBox::new()?
             .selection_mode(selection_mode::MULTIPLE)?
-            .item(ListBoxItem::new()?.content(TextBlock::new()?.text("First")?)?)?
-            .item(ListBoxItem::new()?.content(TextBlock::new()?.text("Second")?)?)?
+            .item(ListBoxItem::new()?.content(Some(&TextBlock::new()?.text("First")?))?)?
+            .item(ListBoxItem::new()?.content(Some(&TextBlock::new()?.text("Second")?))?)?
             .on_selection_changed(scope, move |_| {
                 list_changed_from_handler.store(true, Ordering::SeqCst);
             })?;
@@ -231,7 +231,7 @@ fn builders_create_a_real_window_through_nativeaot() {
         assert_eq!(list_box.get_selection_mode()?, selection_mode::MULTIPLE);
         let list_box_for_post = list_box.clone();
 
-        let hover_panel = Border::new()?.child(TextBlock::new()?.text("Hover")?)?;
+        let hover_panel = Border::new()?.child(Some(&TextBlock::new()?.text("Hover")?))?;
         hover_panel
             .subscribe_pointer_entered(|_| {})?
             .unsubscribe()?;
@@ -282,7 +282,7 @@ fn builders_create_a_real_window_through_nativeaot() {
             .border_brush(Brush::new(Color::rgb(0xAA, 0xBB, 0xCC), 0.5))?
             .border_thickness(Thickness::uniform(2.0))?
             .corner_radius(CornerRadius::uniform(4.0))?
-            .child(text_readout)?;
+            .child(Some(&text_readout))?;
         assert_eq!(laid_out.get_padding()?, Thickness::uniform(6.0));
         assert_eq!(
             laid_out.get_background()?,
@@ -374,13 +374,13 @@ fn builders_create_a_real_window_through_nativeaot() {
             .tab_strip_placement(Dock::Top)?
             .item(
                 TabItem::new()?
-                    .header(TextBlock::new()?.text("First")?)?
-                    .content(TextBlock::new()?.text("First page")?)?,
+                    .header(Some(&TextBlock::new()?.text("First")?))?
+                    .content(Some(&TextBlock::new()?.text("First page")?))?,
             )?
             .item(
                 TabItem::new()?
-                    .header(TextBlock::new()?.text("Second")?)?
-                    .content(TextBlock::new()?.text("Second page")?)?,
+                    .header(Some(&TextBlock::new()?.text("Second")?))?
+                    .content(Some(&TextBlock::new()?.text("Second page")?))?,
             )?
             .selected_index(1)?;
         assert_eq!(tabs.items()?.len()?, 2);
@@ -389,9 +389,9 @@ fn builders_create_a_real_window_through_nativeaot() {
 
         // A TreeViewItem is an ItemsControl, so children go into the inherited Items slot and
         // Level is maintained by the control rather than written from Rust.
-        let leaf = TreeViewItem::new()?.header(TextBlock::new()?.text("Leaf")?)?;
+        let leaf = TreeViewItem::new()?.header(Some(&TextBlock::new()?.text("Leaf")?))?;
         let branch = TreeViewItem::new()?
-            .header(TextBlock::new()?.text("Branch")?)?
+            .header(Some(&TextBlock::new()?.text("Branch")?))?
             .item(leaf)?
             .expanded(true)?;
         assert!(branch.get_is_expanded()?);
@@ -415,8 +415,8 @@ fn builders_create_a_real_window_through_nativeaot() {
         // Wave B. A Menu is an imperative ItemsControl, not the view-model NativeMenu: it opens
         // and closes through methods and its items are real controls.
         let save_item = MenuItem::new()?
-            .header(TextBlock::new()?.text("Save")?)?
-            .icon(Image::new()?)?
+            .header(Some(&TextBlock::new()?.text("Save")?))?
+            .icon(Some(&Image::new()?))?
             .toggle_type(MenuItemToggleType::CheckBox)?
             .checked(true)?
             .group_name("edits")?;
@@ -425,7 +425,7 @@ fn builders_create_a_real_window_through_nativeaot() {
         assert_eq!(save_item.get_group_name()?.as_deref(), Some("edits"));
         save_item.subscribe_click(|_| {})?.unsubscribe()?;
         let file_menu_item = MenuItem::new()?
-            .header(TextBlock::new()?.text("File")?)?
+            .header(Some(&TextBlock::new()?.text("File")?))?
             .item(save_item)?;
         assert_eq!(file_menu_item.items()?.len()?, 1);
 
@@ -443,7 +443,7 @@ fn builders_create_a_real_window_through_nativeaot() {
         // A flyout is an AvaloniaObject rather than a Control, so it is not a child of anything;
         // it reaches a control through show_at instead of through an attached property.
         let flyout = Flyout::new()?
-            .content(TextBlock::new()?.text("Flyout body")?)?
+            .content(Some(&TextBlock::new()?.text("Flyout body")?))?
             .placement(PlacementMode::BottomEdgeAlignedLeft)?
             .show_mode(FlyoutShowMode::Transient)?
             .horizontal_offset(6.0)?;
@@ -466,9 +466,11 @@ fn builders_create_a_real_window_through_nativeaot() {
             .pane_placement(SplitViewPanePlacement::Left)?
             .open_pane_length(220.0)?
             .compact_pane_length(48.0)?
-            .pane(StackPanel::new()?.child(TextBlock::new()?.text("Pane")?)?)?
+            .pane(Some(
+                &StackPanel::new()?.child(TextBlock::new()?.text("Pane")?)?,
+            ))?
             .pane_background(Brush::solid(Color::rgb(0x22, 0x22, 0x22)))?
-            .content(TextBlock::new()?.text("Body")?)?;
+            .content(Some(&TextBlock::new()?.text("Body")?))?;
         split_view.subscribe_pane_opened(|_| {})?.unsubscribe()?;
         split_view.set_pane_open(true)?;
         assert!(split_view.get_is_pane_open()?);
@@ -553,7 +555,7 @@ fn builders_create_a_real_window_through_nativeaot() {
         let viewbox = Viewbox::new()?
             .stretch(Stretch::Uniform)?
             .stretch_direction(StretchDirection::Both)?
-            .child(TextBlock::new()?.text("Scaled")?)?;
+            .child(Some(&TextBlock::new()?.text("Scaled")?))?;
         assert_eq!(viewbox.get_stretch()?, Stretch::Uniform);
         assert!(viewbox.get_child()?.is_some());
 
@@ -646,7 +648,7 @@ fn builders_create_a_real_window_through_nativeaot() {
             .title("Avalonia Rust")?
             .can_resize(false)?
             .margin(Thickness::uniform(0.0))?
-            .content(panel)?;
+            .content(Some(&panel))?;
         assert!(!window.get_can_resize()?);
         assert_eq!(window.get_window_state()?, WindowState::Normal);
         window.set_can_resize(true)?;

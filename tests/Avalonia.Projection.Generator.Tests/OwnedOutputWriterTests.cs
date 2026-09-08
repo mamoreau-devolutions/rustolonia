@@ -10,6 +10,64 @@ namespace Avalonia.Projection.Generator.Tests;
 
 public class OwnedOutputWriterTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Explicit_directory_tracks_removal_of_its_last_output(bool keepOutputElsewhere)
+    {
+        using var scratch = new Scratch();
+        var directory = Path.Combine(scratch.Root, "adapters");
+        var stale = Path.Combine(directory, "LastAdapter.g.cs");
+        var unrelated = Path.Combine(directory, "notes.txt");
+        var other = Path.Combine(directory, "Other.g.cs");
+        OwnedOutputs.Write(OwnedOutputs.ViewModelGeneratorId, new Dictionary<string, string> { [stale] = "stale\n" });
+        OwnedOutputs.Write(OwnedOutputs.ProjectionGeneratorId, new Dictionary<string, string> { [other] = "other\n" });
+        File.WriteAllText(unrelated, "user\n");
+        var expected = new Dictionary<string, string>();
+        if (keepOutputElsewhere)
+            expected.Add(Path.Combine(scratch.Root, "registry", "Registry.g.cs"), "registry\n");
+        var directories = new[] { directory };
+
+        var check = OwnedOutputs.Check(OwnedOutputs.ViewModelGeneratorId, expected, directories);
+        Assert.Contains(check.Mismatches, item => item == $"OBSOLETE: {stale}");
+        Assert.True(File.Exists(stale));
+
+        OwnedOutputs.Write(OwnedOutputs.ViewModelGeneratorId, expected, directories);
+        Assert.False(File.Exists(stale));
+        Assert.Equal("user\n", File.ReadAllText(unrelated));
+        Assert.Equal("other\n", File.ReadAllText(other));
+        Assert.True(OwnedOutputs.Check(OwnedOutputs.ViewModelGeneratorId, expected, directories).Success);
+        Assert.Contains("\"files\": []", File.ReadAllText(Path.Combine(directory,
+            OwnedOutputs.ManifestFileName(OwnedOutputs.ViewModelGeneratorId))), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Empty_explicit_directory_preserves_modified_obsolete_output()
+    {
+        using var scratch = new Scratch();
+        var stale = Path.Combine(scratch.Root, "Last.g.cs");
+        OwnedOutputs.Write(OwnedOutputs.ViewModelGeneratorId, new Dictionary<string, string> { [stale] = "generated\n" });
+        File.WriteAllText(stale, "edited\n");
+        var expected = new Dictionary<string, string>();
+        var directories = new[] { scratch.Root };
+
+        Assert.Contains(OwnedOutputs.Check(OwnedOutputs.ViewModelGeneratorId, expected, directories).Mismatches,
+            item => item == $"OBSOLETE-MODIFIED: {stale}");
+        Assert.Throws<InvalidOperationException>(() =>
+            OwnedOutputs.Write(OwnedOutputs.ViewModelGeneratorId, expected, directories));
+        Assert.Equal("edited\n", File.ReadAllText(stale));
+    }
+
+    [Fact]
+    public void Checking_empty_explicit_directory_does_not_create_it()
+    {
+        using var scratch = new Scratch();
+        var missing = Path.Combine(scratch.Root, "missing");
+        Assert.True(OwnedOutputs.Check(OwnedOutputs.ViewModelGeneratorId,
+            new Dictionary<string, string>(), [missing]).Success);
+        Assert.False(Directory.Exists(missing));
+    }
+
     [Fact]
     public void Check_mode_does_not_create_missing_directories_or_files()
     {
@@ -315,7 +373,7 @@ public class OwnedOutputWriterTests
 
     private sealed class Scratch : IDisposable
     {
-        public string Root { get; } = Path.Combine(Path.GetTempPath(), "rustolonia-owned-" + Guid.NewGuid().ToString("N"));
+        public string Root { get; } = Path.Combine(AppContext.BaseDirectory, "rustolonia-owned-" + Guid.NewGuid().ToString("N"));
 
         public Scratch() => Directory.CreateDirectory(Root);
 

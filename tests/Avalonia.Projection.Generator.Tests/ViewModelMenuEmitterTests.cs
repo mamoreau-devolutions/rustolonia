@@ -12,6 +12,30 @@ namespace Avalonia.Projection.Generator.Tests;
 public class ViewModelMenuEmitterTests
 {
     [Fact]
+    public void Rejects_enum_name_colliding_with_model_menu_output()
+    {
+        var sample = MenuIr();
+        var ir = new ViewModelIr
+        {
+            Models = sample.Models,
+            Views = sample.Views,
+            Enums = sample.Enums.Concat(
+            [
+                new ViewModelEnumDefinition
+                {
+                    Id = 2,
+                    Name = "ShellViewModelMenus",
+                    ManagedNamespace = "Other.Namespace",
+                    Members = [new ViewModelEnumMember { Name = "Value", Value = 0 }],
+                },
+            ]).ToArray(),
+        };
+
+        var error = Assert.Throws<InvalidOperationException>(() => ViewModelSourceEmitter.EmitCSharp(ir));
+        Assert.Contains("Duplicate generated output 'ShellViewModelMenus.g.cs'", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Emits_a_menu_file_only_for_models_that_declare_menus()
     {
         var files = ViewModelSourceEmitter.EmitCSharp(MenuIr());
