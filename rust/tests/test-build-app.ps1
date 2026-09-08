@@ -419,6 +419,46 @@ Add-Content -LiteralPath (Join-Path $PSScriptRoot 'signatures.log') -Value $Arti
     $badManifestPath = Join-Path $consumer 'bad.json'
     $badManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $badManifestPath
     Assert-Throws { & (Join-Path $root 'rust' 'build-app.ps1') -ProducerRoot $fakeProducer -Manifest $badManifestPath } 'unknown field'
+
+    $outsideNoticeDirectory = Join-Path $scratch 'outside notices'
+    New-Item -ItemType Directory -Force -Path $outsideNoticeDirectory | Out-Null
+    $outsideNotice = Join-Path $outsideNoticeDirectory 'OUTSIDE.txt'
+    Set-Content -LiteralPath $outsideNotice -Value 'must not be packaged'
+    Set-Content -LiteralPath (Join-Path $consumer 'sbom.cdx.json') -Value 'reserved'
+    Set-Content -LiteralPath (Join-Path $consumer 'SBOM.CDX.JSON') -Value 'reserved case variant'
+    $firstNoticeDirectory = Join-Path $consumer 'first notices'
+    $secondNoticeDirectory = Join-Path $consumer 'second notices'
+    New-Item -ItemType Directory -Force -Path $firstNoticeDirectory, $secondNoticeDirectory | Out-Null
+    Set-Content -LiteralPath (Join-Path $firstNoticeDirectory 'NOTICE.txt') -Value 'first'
+    Set-Content -LiteralPath (Join-Path $secondNoticeDirectory 'notice.txt') -Value 'second'
+    $noticeValidationCases = @(
+        @{ Value = @($outsideNotice); Error = 'must be relative' },
+        @{ Value = @([IO.Path]::GetRelativePath($consumer, $outsideNotice)); Error = 'must remain within' },
+        @{ Value = @("NOTICE`nINJECTED"); Error = 'must not contain line terminators' },
+        @{ Value = @('SBOM.CDX.JSON'); Error = 'reserved bundle filename' },
+        @{ Value = @('first notices/NOTICE.txt', 'second notices/notice.txt'); Error = 'unique filenames' }
+    )
+    foreach ($case in $noticeValidationCases) {
+        $badManifest = Get-Content -LiteralPath (Join-Path $consumer 'avalonia-app.json') -Raw | ConvertFrom-Json -AsHashtable
+        $badManifest.noticeFiles = $case.Value
+        $badManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $badManifestPath
+        Assert-Throws { & (Join-Path $root 'rust' 'build-app.ps1') -ProducerRoot $fakeProducer -Manifest $badManifestPath } $case.Error
+    }
+    $linkedNoticeDirectory = Join-Path $consumer 'linked notices'
+    try {
+        $linkType = if ($IsWindows) { 'Junction' } else { 'SymbolicLink' }
+        New-Item -ItemType $linkType -Path $linkedNoticeDirectory -Target $outsideNoticeDirectory -ErrorAction Stop | Out-Null
+        $badManifest = Get-Content -LiteralPath (Join-Path $consumer 'avalonia-app.json') -Raw | ConvertFrom-Json -AsHashtable
+        $badManifest.noticeFiles = @('linked notices/OUTSIDE.txt')
+        $badManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $badManifestPath
+        Assert-Throws { & (Join-Path $root 'rust' 'build-app.ps1') -ProducerRoot $fakeProducer -Manifest $badManifestPath } 'must not traverse'
+    }
+    finally {
+        if (Test-Path -LiteralPath $linkedNoticeDirectory) {
+            Remove-Item -LiteralPath $linkedNoticeDirectory -Force
+        }
+    }
+
     $invalidFields = @(
         @{ Field = 'version'; Value = '1' },
         @{ Field = 'version'; Value = '2026-01-01T00:00:00Z' },
@@ -432,6 +472,8 @@ Add-Content -LiteralPath (Join-Path $PSScriptRoot 'signatures.log') -Value $Arti
         @{ Field = 'binary'; Value = '' },
         @{ Field = 'binary'; Value = $null },
         @{ Field = 'binary'; Value = @('demo_app') },
+        @{ Field = 'noticeFiles'; Value = 'LICENSE.app' },
+        @{ Field = 'noticeFiles'; Value = @('') },
         @{ Field = 'rid'; Value = 'WIN-X64' },
         @{ Field = 'rid'; Value = @('win-x64') },
         @{ Field = 'configuration'; Value = 'release' },
@@ -522,6 +564,8 @@ Add-Content -LiteralPath (Join-Path $PSScriptRoot 'signatures.log') -Value $Arti
             $mockManifest.rid = $nativeRid
             $mockManifest.configuration = 'Release'
             $mockManifest.outputDirectory = $consumerBundle
+            Set-Content -LiteralPath (Join-Path $consumer 'LICENSE.app') -Value 'application license'
+            $mockManifest.noticeFiles = @('LICENSE.app')
             $mockManifestPath = Join-Path $consumer 'mock-build.json'
             $mockManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $mockManifestPath
             $expectLockedMetadata = $true
@@ -543,6 +587,7 @@ Add-Content -LiteralPath (Join-Path $PSScriptRoot 'signatures.log') -Value $Arti
             Remove-Item Env:AVALONIA_RUST_SIGN_COMMAND
             & (Join-Path $root 'rust' 'package.ps1') -Rid $nativeRid -ProducerRoot $fakeProducer -OutputRoot $sampleOutput
             & (Join-Path $root 'rust' 'build-app.ps1') -ProducerRoot $fakeProducer -Manifest $mockManifestPath -SkipGenerate
+            Assert-True ((Get-Content -LiteralPath (Join-Path $consumerBundle 'LICENSE.app') -Raw).Trim() -eq 'application license') 'Consumer bundles must include application-specific notice files.'
             foreach ($output in @($sampleBundle, $consumerBundle)) {
                 Assert-True (-not (Test-Path -LiteralPath (Join-Path $output 'previous.bin'))) 'Successful entry points must replace stale bundles.'
                 Assert-True (Test-Path -LiteralPath (Join-Path $output 'sbom.cdx.json')) 'Successful entry points must publish an SBOM.'

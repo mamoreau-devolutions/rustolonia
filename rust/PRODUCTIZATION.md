@@ -110,6 +110,11 @@ executable, the producer's `licence.md`, Rustolonia's `LICENSE` and
 checksums to the manifest's adjacent output directory. A local
 `AVALONIA_RUST_SIGN_COMMAND` wrapper may sign final binaries before SBOM and
 checksums; it is never downloaded or shell-expanded.
+The optional `noticeFiles` manifest array adds application-specific license or
+notice files to that bundle before its SBOM and checksums are generated. Entries
+must be relative files contained beneath the manifest directory, cannot traverse
+symbolic links or reparse points, and must have case-insensitively distinct,
+non-reserved basenames.
 
 Both packaging entrypoints share `package-shared.ps1`: target mappings, native
 preparation, command construction, native-library copying, signing and checksums.

@@ -31,6 +31,37 @@ function Resolve-ManifestPath {
     return [System.IO.Path]::GetFullPath((Join-Path $ManifestDirectory $Value))
 }
 
+function Resolve-ManifestNoticePath {
+    param([string]$ManifestDirectory, [string]$Value)
+    if ([System.IO.Path]::IsPathRooted($Value)) {
+        throw 'Invalid consumer manifest: noticeFiles entries must be relative to the manifest directory'
+    }
+
+    $candidate = [IO.Path]::GetFullPath((Join-Path $ManifestDirectory $Value))
+    $relative = [IO.Path]::GetRelativePath($ManifestDirectory, $candidate)
+    $separator = [IO.Path]::DirectorySeparatorChar
+    $alternateSeparator = [IO.Path]::AltDirectorySeparatorChar
+    if ([IO.Path]::IsPathRooted($relative) -or
+        $relative -eq '..' -or
+        $relative.StartsWith("..$separator", [StringComparison]::Ordinal) -or
+        $relative.StartsWith("..$alternateSeparator", [StringComparison]::Ordinal)) {
+        throw 'Invalid consumer manifest: noticeFiles entries must remain within the manifest directory'
+    }
+    if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+        throw "Invalid consumer manifest: noticeFiles entry does not exist: $candidate"
+    }
+
+    $current = $ManifestDirectory
+    foreach ($segment in $relative -split '[\\/]') {
+        $current = Join-Path $current $segment
+        $item = Get-Item -LiteralPath $current -Force
+        if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw 'Invalid consumer manifest: noticeFiles entries must not traverse symbolic links or reparse points'
+        }
+    }
+    return $candidate
+}
+
 function Read-ConsumerManifest {
     param([string]$ManifestPath)
     if (-not (Test-Path -LiteralPath $ManifestPath -PathType Leaf)) {
@@ -38,7 +69,7 @@ function Read-ConsumerManifest {
     }
     $document = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json -AsHashtable
     if ($document -isnot [hashtable]) { throw 'Invalid consumer manifest: the document must be an object' }
-    $unknown = @($document.Keys | Where-Object { $_ -cnotin ($script:Required + @('binary')) })
+    $unknown = @($document.Keys | Where-Object { $_ -cnotin ($script:Required + @('binary', 'noticeFiles')) })
     if ($unknown.Count -gt 0) { throw "Invalid consumer manifest: unknown field(s): $($unknown -join ', ')" }
     $missing = @($script:Required | Where-Object { -not $document.ContainsKey($_) })
     if ($missing.Count -gt 0) { throw "Invalid consumer manifest: missing required field(s): $($missing -join ', ')" }
@@ -64,6 +95,32 @@ function Read-ConsumerManifest {
         $document.binary = $document.packageName
     }
     $manifestDirectory = Split-Path -Parent $ManifestPath
+    $noticePaths = @()
+    if ($document.ContainsKey('noticeFiles')) {
+        if ($document.noticeFiles -is [string] -or $document.noticeFiles -isnot [System.Collections.IList]) {
+            throw 'Invalid consumer manifest: noticeFiles must be an array of non-empty paths'
+        }
+        foreach ($notice in $document.noticeFiles) {
+            if ($notice -isnot [string] -or [string]::IsNullOrWhiteSpace($notice)) {
+                throw 'Invalid consumer manifest: noticeFiles must be an array of non-empty paths'
+            }
+            if ($notice.Contains("`r") -or $notice.Contains("`n")) {
+                throw 'Invalid consumer manifest: noticeFiles entries must not contain line terminators'
+            }
+            $noticePath = Resolve-ManifestNoticePath $manifestDirectory $notice
+            $noticeName = Split-Path -Leaf $noticePath
+            # Bundle metadata names stay portable across case-sensitive and
+            # case-insensitive destination filesystems.
+            $comparison = [StringComparison]::OrdinalIgnoreCase
+            if (@('sbom.cdx.json', 'checksums.sha256') | Where-Object { $noticeName.Equals($_, $comparison) }) {
+                throw "Invalid consumer manifest: noticeFiles entry uses a reserved bundle filename: $noticeName"
+            }
+            if (@($noticePaths | Where-Object { $noticeName.Equals((Split-Path -Leaf $_), $comparison) }).Count -gt 0) {
+                throw "Invalid consumer manifest: noticeFiles entries must have unique filenames: $noticeName"
+            }
+            $noticePaths += $noticePath
+        }
+    }
     $paths = @{}
     foreach ($field in $script:PathFields) {
         $paths[$field] = Resolve-ManifestPath $manifestDirectory ([string]$document[$field])
@@ -78,6 +135,7 @@ function Read-ConsumerManifest {
     }
     $document._paths = $paths
     $document._manifestDirectory = $manifestDirectory
+    $document._noticeFiles = $noticePaths
     return $document
 }
 
@@ -173,6 +231,13 @@ function Invoke-ConsumerPackage {
         Copy-BundleFiles -SourceDirectory $staging -DestinationDirectory $bundle -HostFile $hostFile -Rid $rid
         Copy-Item -LiteralPath $executable -Destination (Join-Path $bundle (Split-Path -Leaf $executable))
         Copy-BundleNotices -ProducerRoot $ProducerRootPath -RustoloniaRoot $rustoloniaRootPath -DestinationDirectory $bundle
+        foreach ($notice in $Document._noticeFiles) {
+            $noticeDestination = Join-Path $bundle (Split-Path -Leaf $notice)
+            if (Test-Path -LiteralPath $noticeDestination) {
+                throw "Application notice conflicts with another bundle file: $noticeDestination"
+            }
+            Copy-Item -LiteralPath $notice -Destination $noticeDestination
+        }
         $signTargets = @(
             (Join-Path $bundle (Split-Path -Leaf $executable)),
             (Join-Path $bundle (Split-Path -Leaf $hostFile))

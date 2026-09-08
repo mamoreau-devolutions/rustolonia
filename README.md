@@ -16,6 +16,7 @@ pinned `avalonia-src` producer submodule at commit
 | `host/` | `Avalonia.Host` - the C# NativeAOT host that serves the ABI, plus its generated object model |
 | `projection/` | The projection pipeline: IR extraction, C#/header emitters, and the generator tools |
 | `interop/` | `Avalonia.Rust` and `Avalonia.Rust.Interop` - the managed-side view-model interop layer |
+| `apps/system-monitor/` | NeoHtop, a real Rust-owned system monitor with compiled AXAML presentation and a packaged NativeAOT host |
 | `tests/` | Host, IR, and generator test suites |
 | `samples/` | `RustViewModelSample.Managed` - the sample presentation project the host consumes |
 | `build/` | Vendored MSBuild configuration (versioning, signing, analyzers, xunit) |
@@ -52,6 +53,13 @@ to the current OS/architecture and `global.json` pins the supported SDK policy.
 Commit `Cargo.lock` after the first build and omit `-UpdateLockFile` thereafter.
 Normal builds require matching producer revisions/applied patches and initialized
 submodules, run Cargo locked, and never format handwritten Rust.
+
+The in-repository system monitor uses the same consumer path without a vendored
+checkout:
+
+```pwsh
+pwsh ./apps/system-monitor/build.ps1
+```
 
 ## CI
 
