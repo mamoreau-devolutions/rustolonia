@@ -32,6 +32,11 @@ jobs:
   release-gate:
     name: ${{ matrix.rid }}
     runs-on: ${{ matrix.os }}
+    env:
+      # Keep the producer's package-source names and source mapping paired.
+      # Windows runners otherwise contribute a nuget.org alias for the same URL,
+      # which can supersede api.nuget.org while remaining unmapped.
+      RestoreConfigFile: ${{ github.workspace }}/avalonia-src/NuGet.Config
     strategy:
       fail-fast: false
       matrix:

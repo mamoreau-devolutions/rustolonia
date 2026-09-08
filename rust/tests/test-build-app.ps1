@@ -656,7 +656,9 @@ version = "0.1.0"
             # /var is a symlink to /private/var. MSBuild canonicalizes the project
             # directory before resolving references, so create the external smoke
             # consumer under the physical path as well.
-            $nativeTempRoot = (& /usr/bin/realpath $nativeTempRoot).Trim()
+            Push-Location -LiteralPath $nativeTempRoot
+            try { $nativeTempRoot = (& /bin/pwd -P).Trim() }
+            finally { Pop-Location }
         }
         $nativeScratch = Join-Path $nativeTempRoot ('rustolonia-native-' + [guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $nativeScratch | Out-Null
