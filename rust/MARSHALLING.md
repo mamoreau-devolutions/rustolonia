@@ -9,6 +9,18 @@ solid colour and an opacity. `Grid`'s track definitions are the one member that
 crosses as a **string**: they use the same comma-separated length list Avalonia
 already parses and prints (see [Grid track definitions](#grid-track-definitions)).
 
+## Nullable safe inputs
+
+Nullable interface-valued setters and builders accept `Option`: pass
+`Some(&control)` to assign a control, or `None` to clear it. Root-control
+properties accept `Option<&dyn AsControl>`; more specific interfaces accept
+`Option<&SpecificType>`. Nonnullable interface properties still require a value.
+For example, `button.set_content(None)?` clears the button's content.
+
+String method inputs accept `impl AsRef<str>` when required and `Option<&str>`
+when nullable. The generated wrapper keeps null-terminated UTF-16 buffers alive
+through the ABI call; `None` remains a null pointer, distinct from an empty string.
+
 ## The structs
 
 Every struct is `LayoutKind.Sequential` / `#[repr(C)]`, contains only `double`
@@ -398,7 +410,7 @@ AvnHResult (AVN_CALL *hide)(IAvnFlyoutBase* self);
 
 ```rust
 let flyout = Flyout::new()?
-    .content(TextBlock::new()?.text("Pick one")?)?
+    .content(Some(&TextBlock::new()?.text("Pick one")?))?
     .placement(PlacementMode::BottomEdgeAlignedLeft)?
     .show_mode(FlyoutShowMode::Transient)?;
 flyout.show_at_with_control(&button)?;
@@ -452,10 +464,10 @@ controls, built and driven from Rust:
 ```rust
 let menu = Menu::new()?.item(
     MenuItem::new()?
-        .header(TextBlock::new()?.text("File")?)?
+        .header(Some(&TextBlock::new()?.text("File")?))?
         .item(
             MenuItem::new()?
-                .header(TextBlock::new()?.text("Save")?)?
+                .header(Some(&TextBlock::new()?.text("Save")?))?
                 .toggle_type(MenuItemToggleType::CheckBox)?
                 .checked(true)?,
         )?,
@@ -490,8 +502,8 @@ let split_view = SplitView::new()?
     .display_mode(SplitViewDisplayMode::CompactOverlay)?
     .pane_placement(SplitViewPanePlacement::Left)?
     .open_pane_length(220.0)?
-    .pane(StackPanel::new()?.child(TextBlock::new()?.text("Pane")?)?)?
-    .content(TextBlock::new()?.text("Body")?)?;
+    .pane(Some(&StackPanel::new()?.child(TextBlock::new()?.text("Pane")?)?))?
+    .content(Some(&TextBlock::new()?.text("Body")?))?;
 split_view.set_pane_open(true)?;
 ```
 

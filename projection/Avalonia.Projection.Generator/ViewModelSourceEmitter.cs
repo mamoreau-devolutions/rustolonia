@@ -10,19 +10,24 @@ public static class ViewModelSourceEmitter
     public static IReadOnlyDictionary<string, string> EmitCSharp(ViewModelIr ir)
     {
         ir.Validate();
-        var files = new Dictionary<string, string>(StringComparer.Ordinal);
+        var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        void Add(string name, string content)
+        {
+            if (!files.TryAdd(name, content))
+                throw new InvalidOperationException($"Duplicate generated output '{name}'.");
+        }
+        Add("RustViewRegistry.g.cs", EmitRegistry(ir));
         foreach (var enumDefinition in ir.Enums)
-            files[$"{enumDefinition.Name}.g.cs"] = EmitCSharpEnum(enumDefinition);
+            Add($"{enumDefinition.Name}.g.cs", EmitCSharpEnum(enumDefinition));
         foreach (var model in ir.Models)
         {
-            files[$"{model.Name}Adapter.g.cs"] = EmitCSharpAdapter(ir, model);
-            files[$"{model.Name}Metadata.g.cs"] = EmitCSharpMetadata(ir, model);
+            Add($"{model.Name}Adapter.g.cs", EmitCSharpAdapter(ir, model));
+            Add($"{model.Name}Metadata.g.cs", EmitCSharpMetadata(ir, model));
             if (model.Menus.Count > 0)
-                files[$"{model.Name}Menus.g.cs"] = EmitCSharpMenus(ir, model);
+                Add($"{model.Name}Menus.g.cs", EmitCSharpMenus(ir, model));
         }
         foreach (var converter in ir.Converters)
-            files[$"{converter.Name}Converter.g.cs"] = EmitCSharpConverter(converter);
-        files["RustViewRegistry.g.cs"] = EmitRegistry(ir);
+            Add($"{converter.Name}Converter.g.cs", EmitCSharpConverter(converter));
         return files;
     }
 
@@ -2770,4 +2775,3 @@ public static class ViewModelSourceEmitter
         return sb.ToString();
     }
 }
-

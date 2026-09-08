@@ -19,6 +19,44 @@ namespace Avalonia.Host.Tests.Desktop;
 /// </summary>
 public class DesktopFileDropRegistryTests
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Multiple_subscriptions_restore_only_after_the_last_removal(bool original, bool reverse)
+    {
+        using var app = UnitTestApplication.Start(TestServices.StyledWindow);
+        var registry = new AvnFileDropRegistry();
+        var border = new Border();
+        DragDrop.SetAllowDrop(border, original);
+        registry.Subscribe(border, DragDropEffects.Copy, new RecordingHandler(), out var first);
+        registry.Subscribe(border, DragDropEffects.Copy, new RecordingHandler(), out var second);
+        Assert.Equal(0, registry.Unsubscribe(reverse ? second : first));
+        Assert.True(DragDrop.GetAllowDrop(border));
+        Assert.Equal(0, registry.Unsubscribe(reverse ? first : second));
+        Assert.Equal(original, DragDrop.GetAllowDrop(border));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Clear_restores_original_state_for_shared_targets(bool original)
+    {
+        using var app = UnitTestApplication.Start(TestServices.StyledWindow);
+        var registry = new AvnFileDropRegistry();
+        var border = new Border();
+        DragDrop.SetAllowDrop(border, original);
+        registry.Subscribe(border, DragDropEffects.Copy, new RecordingHandler(), out _);
+        registry.Subscribe(border, DragDropEffects.Copy, new RecordingHandler(), out _);
+        registry.Clear();
+        registry.Clear();
+        Assert.Equal(original, DragDrop.GetAllowDrop(border));
+        registry.Subscribe(border, DragDropEffects.Copy, new RecordingHandler(), out var next);
+        registry.Unsubscribe(next);
+        Assert.Equal(original, DragDrop.GetAllowDrop(border));
+    }
+
     [Fact]
     public void Subscribing_enables_dropping_and_restores_the_previous_value()
     {

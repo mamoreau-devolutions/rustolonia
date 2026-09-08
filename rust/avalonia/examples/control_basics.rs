@@ -15,7 +15,7 @@ fn main() -> avalonia::Result<()> {
         let click_count_for_handler = click_count.clone();
         let mut clicks = 0;
         let button = Button::new()?
-            .content(TextBlock::new()?.text("Click me")?)?
+            .content(Some(&TextBlock::new()?.text("Click me")?))?
             // ClickMode::Press fires on button-down; `default` makes Enter activate it.
             .click_mode(ClickMode::Press)?
             .default(true)?
@@ -74,9 +74,9 @@ fn main() -> avalonia::Result<()> {
         let toggle_value = TextBlock::new()?.text("Toggle: on")?;
         let toggle_value_for_handler = toggle_value.clone();
         let toggle = ToggleSwitch::new()?
-            .content(TextBlock::new()?.text("ToggleSwitch")?)?
-            .on_content(TextBlock::new()?.text("On")?)?
-            .off_content(TextBlock::new()?.text("Off")?)?
+            .content(Some(&TextBlock::new()?.text("ToggleSwitch")?))?
+            .on_content(Some(&TextBlock::new()?.text("On")?))?
+            .off_content(Some(&TextBlock::new()?.text("Off")?))?
             .checked(Some(true))?;
         let toggle_for_handler = toggle.clone();
         let toggle = toggle.on_is_checked_changed(scope, move |_| {
@@ -100,28 +100,28 @@ fn main() -> avalonia::Result<()> {
             .child(
                 RadioButton::new()?
                     .group_name("DemoGroup")?
-                    .content(TextBlock::new()?.text("Option A")?)?
+                    .content(Some(&TextBlock::new()?.text("Option A")?))?
                     .checked(Some(true))?,
             )?
             .child(
                 RadioButton::new()?
                     .group_name("DemoGroup")?
-                    .content(TextBlock::new()?.text("Option B")?)?,
+                    .content(Some(&TextBlock::new()?.text("Option B")?))?,
             )?
             .child(
                 RadioButton::new()?
                     .group_name("DemoGroup")?
-                    .content(TextBlock::new()?.text("Option C")?)?,
+                    .content(Some(&TextBlock::new()?.text("Option C")?))?,
             )?;
 
         let expander = Expander::new()?
-            .header(TextBlock::new()?.text("Expandable section")?)?
-            .content(
-                StackPanel::new()?
+            .header(Some(&TextBlock::new()?.text("Expandable section")?))?
+            .content(Some(
+                &StackPanel::new()?
                     .spacing(4.0)?
                     .child(TextBlock::new()?.text("Content inside the expander.")?)?
                     .child(TextBlock::new()?.text("Generated from the shared projection IR.")?)?,
-            )?
+            ))?
             .expand_direction(ExpandDirection::Down)?
             .expanded(true)?;
 
@@ -130,9 +130,9 @@ fn main() -> avalonia::Result<()> {
         let combo_box = ComboBox::new()?
             .placeholder_text("Pick a color")?
             .max_drop_down_height(220.0)?
-            .item(ComboBoxItem::new()?.content(TextBlock::new()?.text("Red")?)?)?
-            .item(ComboBoxItem::new()?.content(TextBlock::new()?.text("Green")?)?)?
-            .item(ComboBoxItem::new()?.content(TextBlock::new()?.text("Blue")?)?)?
+            .item(ComboBoxItem::new()?.content(Some(&TextBlock::new()?.text("Red")?))?)?
+            .item(ComboBoxItem::new()?.content(Some(&TextBlock::new()?.text("Green")?))?)?
+            .item(ComboBoxItem::new()?.content(Some(&TextBlock::new()?.text("Blue")?))?)?
             .selected_index(2)?;
         let combo_box_for_handler = combo_box.clone();
         let combo_box = combo_box.on_selection_changed(scope, move |_| {
@@ -148,10 +148,10 @@ fn main() -> avalonia::Result<()> {
         let list_status_for_handler = list_status.clone();
         let list_box = ListBox::new()?
             .selection_mode(selection_mode::MULTIPLE)?
-            .item(ListBoxItem::new()?.content(TextBlock::new()?.text("Item 1")?)?)?
-            .item(ListBoxItem::new()?.content(TextBlock::new()?.text("Item 2")?)?)?
-            .item(ListBoxItem::new()?.content(TextBlock::new()?.text("Item 3")?)?)?
-            .item(ListBoxItem::new()?.content(TextBlock::new()?.text("Item 4")?)?)?
+            .item(ListBoxItem::new()?.content(Some(&TextBlock::new()?.text("Item 1")?))?)?
+            .item(ListBoxItem::new()?.content(Some(&TextBlock::new()?.text("Item 2")?))?)?
+            .item(ListBoxItem::new()?.content(Some(&TextBlock::new()?.text("Item 3")?))?)?
+            .item(ListBoxItem::new()?.content(Some(&TextBlock::new()?.text("Item 4")?))?)?
             .selected_index(1)?;
         let list_box_for_handler = list_box.clone();
         let list_box = list_box.on_selection_changed(scope, move |_| {
@@ -170,7 +170,7 @@ fn main() -> avalonia::Result<()> {
             .spacing(8.0)?
             .child(
                 Button::new()?
-                    .content(TextBlock::new()?.text("Select all")?)?
+                    .content(Some(&TextBlock::new()?.text("Select all")?))?
                     .on_click(scope, move |_| {
                         select_all_target
                             .select_all()
@@ -179,7 +179,7 @@ fn main() -> avalonia::Result<()> {
             )?
             .child(
                 Button::new()?
-                    .content(TextBlock::new()?.text("Clear selection")?)?
+                    .content(Some(&TextBlock::new()?.text("Clear selection")?))?
                     .on_click(scope, move |_| {
                         unselect_all_target
                             .unselect_all()
@@ -191,7 +191,7 @@ fn main() -> avalonia::Result<()> {
         let entered_state = hover_state.clone();
         let exited_state = hover_state.clone();
         let hover_panel = Border::new()?
-            .child(hover_state)?
+            .child(Some(&hover_state))?
             .on_pointer_entered(scope, move |_| {
                 entered_state
                     .set_text("over")
@@ -211,7 +211,7 @@ fn main() -> avalonia::Result<()> {
         let copy_text = clipboard_text.clone();
         let copy_status = clipboard_status.clone();
         let copy = Button::new()?
-            .content(TextBlock::new()?.text("Copy")?)?
+            .content(Some(&TextBlock::new()?.text("Copy")?))?
             .on_click(scope, move |_| {
                 let text = copy_text
                     .get_text()
@@ -244,7 +244,7 @@ fn main() -> avalonia::Result<()> {
         let paste_text = clipboard_text.clone();
         let paste_status = clipboard_status.clone();
         let paste = Button::new()?
-            .content(TextBlock::new()?.text("Paste")?)?
+            .content(Some(&TextBlock::new()?.text("Paste")?))?
             .on_click(scope, move |_| {
                 match paste_scope.clipboard_get_text(&paste_window) {
                     Ok(operation) => {
@@ -277,21 +277,23 @@ fn main() -> avalonia::Result<()> {
                 }
             })?;
 
-        let layout_demo = Border::new()?.padding(Thickness::uniform(8.0))?.child(
-            StackPanel::new()?
-                .orientation(Orientation::Horizontal)?
-                .spacing(8.0)?
-                .child(
-                    TextBlock::new()?
-                        .text("Right aligned, inset")?
-                        .name("layout_readout")?
-                        .margin(Thickness::symmetric(16.0, 4.0))?
-                        .horizontal_alignment(HorizontalAlignment::Right)?
-                        .vertical_alignment(VerticalAlignment::Center)?
-                        .min_width(160.0)?
-                        .opacity(0.7)?,
-                )?,
-        )?;
+        let layout_demo = Border::new()?
+            .padding(Thickness::uniform(8.0))?
+            .child(Some(
+                &StackPanel::new()?
+                    .orientation(Orientation::Horizontal)?
+                    .spacing(8.0)?
+                    .child(
+                        TextBlock::new()?
+                            .text("Right aligned, inset")?
+                            .name("layout_readout")?
+                            .margin(Thickness::symmetric(16.0, 4.0))?
+                            .horizontal_alignment(HorizontalAlignment::Right)?
+                            .vertical_alignment(VerticalAlignment::Center)?
+                            .min_width(160.0)?
+                            .opacity(0.7)?,
+                    )?,
+            ))?;
 
         let chrome_demo = Border::new()?
             .padding(Thickness::uniform(10.0))?
@@ -299,15 +301,15 @@ fn main() -> avalonia::Result<()> {
             .border_brush(Brush::new(Color::rgb(0x00, 0x7A, 0xCC), 0.6))?
             .border_thickness(Thickness::uniform(1.0))?
             .corner_radius(CornerRadius::uniform(6.0))?
-            .child(
-                TextBlock::new()?
+            .child(Some(
+                &TextBlock::new()?
                     .text("Solid brushes, border geometry and text metrics")?
                     .foreground(Brush::solid(Color::rgb(0xEE, 0xEE, 0xEE)))?
                     .font_size(15.0)?
                     .font_weight(FontWeight::DemiBold)?
                     .text_alignment(TextAlignment::Center)?
                     .padding(Thickness::symmetric(6.0, 2.0))?,
-            )?;
+            ))?;
 
         // Grid tracks are the same comma-separated length list AXAML uses: `*` takes the
         // remaining space, `Auto` sizes to content, and a bare number is a fixed size.
@@ -359,13 +361,17 @@ fn main() -> avalonia::Result<()> {
             .tab_strip_placement(Dock::Top)?
             .item(
                 TabItem::new()?
-                    .header(TextBlock::new()?.text("Overview")?)?
-                    .content(TextBlock::new()?.text("Tabs inherit Items and SelectedIndex.")?)?,
+                    .header(Some(&TextBlock::new()?.text("Overview")?))?
+                    .content(Some(
+                        &TextBlock::new()?.text("Tabs inherit Items and SelectedIndex.")?,
+                    ))?,
             )?
             .item(
                 TabItem::new()?
-                    .header(TextBlock::new()?.text("Details")?)?
-                    .content(TextBlock::new()?.text("TabItem adds only IsSelected.")?)?,
+                    .header(Some(&TextBlock::new()?.text("Details")?))?
+                    .content(Some(
+                        &TextBlock::new()?.text("TabItem adds only IsSelected.")?,
+                    ))?,
             )?
             .selected_index(0)?;
 
@@ -374,10 +380,13 @@ fn main() -> avalonia::Result<()> {
             .selection_mode(selection_mode::SINGLE)?
             .item(
                 TreeViewItem::new()?
-                    .header(TextBlock::new()?.text("Projected controls")?)?
-                    .item(TreeViewItem::new()?.header(TextBlock::new()?.text("Image")?)?)?
-                    .item(TreeViewItem::new()?.header(TextBlock::new()?.text("TabControl")?)?)?
-                    .item(TreeViewItem::new()?.header(TextBlock::new()?.text("TreeView")?)?)?
+                    .header(Some(&TextBlock::new()?.text("Projected controls")?))?
+                    .item(TreeViewItem::new()?.header(Some(&TextBlock::new()?.text("Image")?))?)?
+                    .item(
+                        TreeViewItem::new()?
+                            .header(Some(&TextBlock::new()?.text("TabControl")?))?,
+                    )?
+                    .item(TreeViewItem::new()?.header(Some(&TextBlock::new()?.text("TreeView")?))?)?
                     .expanded(true)?,
             )?;
 
@@ -387,17 +396,17 @@ fn main() -> avalonia::Result<()> {
         let menu_status_for_click = menu_status.clone();
         let menu = Menu::new()?.item(
             MenuItem::new()?
-                .header(TextBlock::new()?.text("_File")?)?
+                .header(Some(&TextBlock::new()?.text("_File")?))?
                 .item(
                     MenuItem::new()?
-                        .header(TextBlock::new()?.text("Save")?)?
+                        .header(Some(&TextBlock::new()?.text("Save")?))?
                         .on_click(scope, move |_| {
                             menu_status_for_click.set_text("Save clicked").unwrap();
                         })?,
                 )?
                 .item(
                     MenuItem::new()?
-                        .header(TextBlock::new()?.text("Word wrap")?)?
+                        .header(Some(&TextBlock::new()?.text("Word wrap")?))?
                         .toggle_type(MenuItemToggleType::CheckBox)?
                         .checked(true)?,
                 )?,
@@ -406,10 +415,13 @@ fn main() -> avalonia::Result<()> {
         // A flyout is an AvaloniaObject, not a Control, so it is not a child of the panel. It
         // reaches a control through show_at rather than through an attached property.
         let flyout = Flyout::new()?
-            .content(TextBlock::new()?.text("Shown with flyout.show_at_with_control")?)?
+            .content(Some(
+                &TextBlock::new()?.text("Shown with flyout.show_at_with_control")?,
+            ))?
             .placement(PlacementMode::BottomEdgeAlignedLeft)?
             .show_mode(FlyoutShowMode::Transient)?;
-        let flyout_button = Button::new()?.content(TextBlock::new()?.text("Show flyout")?)?;
+        let flyout_button =
+            Button::new()?.content(Some(&TextBlock::new()?.text("Show flyout")?))?;
         let flyout_target = flyout_button.clone();
         let flyout_button = flyout_button.on_click(scope, move |_| {
             flyout.show_at_with_control(&flyout_target).unwrap();
@@ -422,13 +434,13 @@ fn main() -> avalonia::Result<()> {
             .compact_pane_length(40.0)?
             .pane_open(true)?
             .height(120.0)?
-            .pane(
-                StackPanel::new()?
+            .pane(Some(
+                &StackPanel::new()?
                     .orientation(Orientation::Vertical)?
                     .spacing(4.0)?
                     .child(TextBlock::new()?.text("Pane")?)?,
-            )?
-            .content(TextBlock::new()?.text("SplitView content")?)?;
+            ))?
+            .content(Some(&TextBlock::new()?.text("SplitView content")?))?;
 
         // Dates and times cross as ISO-8601 text. Writing takes a bare yyyy-MM-dd or HH:mm;
         // reading normalises to the round-trip form, so the readout is not what was written.
@@ -442,8 +454,8 @@ fn main() -> avalonia::Result<()> {
             time_picker.get_selected_time()?
         ))?;
 
-        window.set_content(
-            StackPanel::new()?
+        window.set_content(Some(
+            &StackPanel::new()?
                 .orientation(Orientation::Vertical)?
                 .spacing(8.0)?
                 .margin(Thickness::uniform(12.0))?
@@ -495,7 +507,7 @@ fn main() -> avalonia::Result<()> {
                         .child(paste)?,
                 )?
                 .child(clipboard_status)?,
-        )?;
+        ))?;
         scope.mount(window)
     })
 }

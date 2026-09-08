@@ -2936,20 +2936,20 @@ impl AutoCompleteBox {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -3471,22 +3471,22 @@ impl AutoCompleteBox {
     pub fn get_inner_left_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_inner_left_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_inner_left_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_inner_left_content(Some(&value))?)
+    pub fn set_inner_left_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_inner_left_content(value.as_ref())?)
     }
-    pub fn inner_left_content(self, value: impl AsControl) -> Result<Self> {
+    pub fn inner_left_content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_inner_left_content(value)?;
         Ok(self)
     }
     pub fn get_inner_right_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_inner_right_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_inner_right_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_inner_right_content(Some(&value))?)
+    pub fn set_inner_right_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_inner_right_content(value.as_ref())?)
     }
-    pub fn inner_right_content(self, value: impl AsControl) -> Result<Self> {
+    pub fn inner_right_content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_inner_right_content(value)?;
         Ok(self)
     }
@@ -3735,20 +3735,20 @@ impl Border {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -3929,11 +3929,11 @@ impl Border {
     pub fn get_child(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_child()?.map(|raw| Control { raw }))
     }
-    pub fn set_child(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_child(Some(&value))?)
+    pub fn set_child(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_child(value.as_ref())?)
     }
-    pub fn child(self, value: impl AsControl) -> Result<Self> {
+    pub fn child(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_child(value)?;
         Ok(self)
     }
@@ -4164,20 +4164,20 @@ impl Button {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -4503,11 +4503,11 @@ impl Button {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -4606,10 +4606,10 @@ impl Button {
     pub fn get_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_flyout(Some(&value.raw))?)
+    pub fn set_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_flyout(value)?;
         Ok(self)
     }
@@ -4776,20 +4776,20 @@ impl ButtonSpinner {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -5115,11 +5115,11 @@ impl ButtonSpinner {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -5351,20 +5351,20 @@ impl Calendar {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -5999,20 +5999,20 @@ impl CalendarDatePicker {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -6712,20 +6712,20 @@ impl Canvas {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -7107,20 +7107,20 @@ impl Carousel {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -7719,20 +7719,20 @@ impl CheckBox {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -8058,11 +8058,11 @@ impl CheckBox {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -8161,10 +8161,10 @@ impl CheckBox {
     pub fn get_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_flyout(Some(&value.raw))?)
+    pub fn set_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_flyout(value)?;
         Ok(self)
     }
@@ -8360,20 +8360,20 @@ impl ComboBox {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -9050,20 +9050,20 @@ impl ComboBoxItem {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -9389,11 +9389,11 @@ impl ComboBoxItem {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -9587,20 +9587,20 @@ impl CommandBar {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -9952,11 +9952,11 @@ impl CommandBar {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -10234,20 +10234,20 @@ impl CommandBarButton {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -10573,11 +10573,11 @@ impl CommandBarButton {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -10676,10 +10676,10 @@ impl CommandBarButton {
     pub fn get_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_flyout(Some(&value.raw))?)
+    pub fn set_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_flyout(value)?;
         Ok(self)
     }
@@ -10903,20 +10903,20 @@ impl CommandBarSeparator {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -11405,20 +11405,20 @@ impl CommandBarToggleButton {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -11744,11 +11744,11 @@ impl CommandBarToggleButton {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -11847,10 +11847,10 @@ impl CommandBarToggleButton {
     pub fn get_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_flyout(Some(&value.raw))?)
+    pub fn set_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_flyout(value)?;
         Ok(self)
     }
@@ -12103,20 +12103,20 @@ impl ContentControl {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -12442,11 +12442,11 @@ impl ContentControl {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -12632,20 +12632,20 @@ impl ContextMenu {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -13176,11 +13176,11 @@ impl ContextMenu {
     pub fn get_placement_target(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_placement_target()?.map(|raw| Control { raw }))
     }
-    pub fn set_placement_target(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_placement_target(Some(&value))?)
+    pub fn set_placement_target(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_placement_target(value.as_ref())?)
     }
-    pub fn placement_target(self, value: impl AsControl) -> Result<Self> {
+    pub fn placement_target(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_placement_target(value)?;
         Ok(self)
     }
@@ -13370,20 +13370,20 @@ impl Control {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -13711,20 +13711,20 @@ impl DatePicker {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -14310,20 +14310,20 @@ impl Decorator {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -14504,11 +14504,11 @@ impl Decorator {
     pub fn get_child(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_child()?.map(|raw| Control { raw }))
     }
-    pub fn set_child(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_child(Some(&value))?)
+    pub fn set_child(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_child(value.as_ref())?)
     }
-    pub fn child(self, value: impl AsControl) -> Result<Self> {
+    pub fn child(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_child(value)?;
         Ok(self)
     }
@@ -14672,20 +14672,20 @@ impl DockPanel {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -15064,20 +15064,20 @@ impl DropDownButton {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -15403,11 +15403,11 @@ impl DropDownButton {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -15506,10 +15506,10 @@ impl DropDownButton {
     pub fn get_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_flyout(Some(&value.raw))?)
+    pub fn set_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_flyout(value)?;
         Ok(self)
     }
@@ -15676,20 +15676,20 @@ impl Expander {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -16015,11 +16015,11 @@ impl Expander {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -16058,11 +16058,11 @@ impl Expander {
     pub fn get_header(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_header()?.map(|raw| Control { raw }))
     }
-    pub fn set_header(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_header(Some(&value))?)
+    pub fn set_header(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_header(value.as_ref())?)
     }
-    pub fn header(self, value: impl AsControl) -> Result<Self> {
+    pub fn header(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_header(value)?;
         Ok(self)
     }
@@ -16293,20 +16293,20 @@ impl FlexPanel {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -16711,11 +16711,11 @@ impl Flyout {
     pub fn get_overlay_input_pass_through_element(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_overlay_input_pass_through_element()?.map(|raw| Control { raw }))
     }
-    pub fn set_overlay_input_pass_through_element(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_overlay_input_pass_through_element(Some(&value))?)
+    pub fn set_overlay_input_pass_through_element(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_overlay_input_pass_through_element(value.as_ref())?)
     }
-    pub fn overlay_input_pass_through_element(self, value: impl AsControl) -> Result<Self> {
+    pub fn overlay_input_pass_through_element(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_overlay_input_pass_through_element(value)?;
         Ok(self)
     }
@@ -16758,11 +16758,11 @@ impl Flyout {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -16921,20 +16921,20 @@ impl Grid {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -17371,20 +17371,20 @@ impl GridSplitter {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -17936,20 +17936,20 @@ impl GroupBox {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -18275,11 +18275,11 @@ impl GroupBox {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -18318,11 +18318,11 @@ impl GroupBox {
     pub fn get_header(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_header()?.map(|raw| Control { raw }))
     }
-    pub fn set_header(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_header(Some(&value))?)
+    pub fn set_header(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_header(value.as_ref())?)
     }
-    pub fn header(self, value: impl AsControl) -> Result<Self> {
+    pub fn header(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_header(value)?;
         Ok(self)
     }
@@ -18486,20 +18486,20 @@ impl HyperlinkButton {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -18825,11 +18825,11 @@ impl HyperlinkButton {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -18928,10 +18928,10 @@ impl HyperlinkButton {
     pub fn get_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_flyout(Some(&value.raw))?)
+    pub fn set_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_flyout(value)?;
         Ok(self)
     }
@@ -19113,20 +19113,20 @@ impl IconElement {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -19599,20 +19599,20 @@ impl Image {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -19984,20 +19984,20 @@ impl ItemsControl {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -20510,20 +20510,20 @@ impl Label {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -20849,11 +20849,11 @@ impl Label {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -20892,11 +20892,11 @@ impl Label {
     pub fn get_target(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_target()?.map(|raw| Control { raw }))
     }
-    pub fn set_target(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_target(Some(&value))?)
+    pub fn set_target(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_target(value.as_ref())?)
     }
-    pub fn target(self, value: impl AsControl) -> Result<Self> {
+    pub fn target(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_target(value)?;
         Ok(self)
     }
@@ -21050,20 +21050,20 @@ impl LayoutTransformControl {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -21244,11 +21244,11 @@ impl LayoutTransformControl {
     pub fn get_child(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_child()?.map(|raw| Control { raw }))
     }
-    pub fn set_child(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_child(Some(&value))?)
+    pub fn set_child(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_child(value.as_ref())?)
     }
-    pub fn child(self, value: impl AsControl) -> Result<Self> {
+    pub fn child(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_child(value)?;
         Ok(self)
     }
@@ -21420,20 +21420,20 @@ impl ListBox {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -22023,20 +22023,20 @@ impl ListBoxItem {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -22362,11 +22362,11 @@ impl ListBoxItem {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -22560,20 +22560,20 @@ impl MaskedTextBox {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -23133,22 +23133,22 @@ impl MaskedTextBox {
     pub fn get_inner_left_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_inner_left_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_inner_left_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_inner_left_content(Some(&value))?)
+    pub fn set_inner_left_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_inner_left_content(value.as_ref())?)
     }
-    pub fn inner_left_content(self, value: impl AsControl) -> Result<Self> {
+    pub fn inner_left_content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_inner_left_content(value)?;
         Ok(self)
     }
     pub fn get_inner_right_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_inner_right_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_inner_right_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_inner_right_content(Some(&value))?)
+    pub fn set_inner_right_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_inner_right_content(value.as_ref())?)
     }
-    pub fn inner_right_content(self, value: impl AsControl) -> Result<Self> {
+    pub fn inner_right_content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_inner_right_content(value)?;
         Ok(self)
     }
@@ -23481,20 +23481,20 @@ impl Menu {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -24099,20 +24099,20 @@ impl MenuBase {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -24709,11 +24709,11 @@ impl MenuFlyout {
     pub fn get_overlay_input_pass_through_element(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_overlay_input_pass_through_element()?.map(|raw| Control { raw }))
     }
-    pub fn set_overlay_input_pass_through_element(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_overlay_input_pass_through_element(Some(&value))?)
+    pub fn set_overlay_input_pass_through_element(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_overlay_input_pass_through_element(value.as_ref())?)
     }
-    pub fn overlay_input_pass_through_element(self, value: impl AsControl) -> Result<Self> {
+    pub fn overlay_input_pass_through_element(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_overlay_input_pass_through_element(value)?;
         Ok(self)
     }
@@ -24925,20 +24925,20 @@ impl MenuItem {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -25371,11 +25371,11 @@ impl MenuItem {
     pub fn get_header(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_header()?.map(|raw| Control { raw }))
     }
-    pub fn set_header(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_header(Some(&value))?)
+    pub fn set_header(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_header(value.as_ref())?)
     }
-    pub fn header(self, value: impl AsControl) -> Result<Self> {
+    pub fn header(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_header(value)?;
         Ok(self)
     }
@@ -25424,11 +25424,11 @@ impl MenuItem {
     pub fn get_icon(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_icon()?.map(|raw| Control { raw }))
     }
-    pub fn set_icon(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_icon(Some(&value))?)
+    pub fn set_icon(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_icon(value.as_ref())?)
     }
-    pub fn icon(self, value: impl AsControl) -> Result<Self> {
+    pub fn icon(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_icon(value)?;
         Ok(self)
     }
@@ -25677,20 +25677,20 @@ impl NotificationCard {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -26016,11 +26016,11 @@ impl NotificationCard {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -26240,20 +26240,20 @@ impl WindowNotificationManager {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -26750,20 +26750,20 @@ impl NumericUpDown {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -27253,22 +27253,22 @@ impl NumericUpDown {
     pub fn get_inner_left_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_inner_left_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_inner_left_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_inner_left_content(Some(&value))?)
+    pub fn set_inner_left_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_inner_left_content(value.as_ref())?)
     }
-    pub fn inner_left_content(self, value: impl AsControl) -> Result<Self> {
+    pub fn inner_left_content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_inner_left_content(value)?;
         Ok(self)
     }
     pub fn get_inner_right_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_inner_right_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_inner_right_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_inner_right_content(Some(&value))?)
+    pub fn set_inner_right_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_inner_right_content(value.as_ref())?)
     }
-    pub fn inner_right_content(self, value: impl AsControl) -> Result<Self> {
+    pub fn inner_right_content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_inner_right_content(value)?;
         Ok(self)
     }
@@ -27446,20 +27446,20 @@ impl Panel {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -27805,20 +27805,20 @@ impl PathIcon {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -28302,20 +28302,20 @@ impl PipsPager {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -28903,20 +28903,20 @@ impl HeaderedContentControl {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -29242,11 +29242,11 @@ impl HeaderedContentControl {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -29285,11 +29285,11 @@ impl HeaderedContentControl {
     pub fn get_header(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_header()?.map(|raw| Control { raw }))
     }
-    pub fn set_header(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_header(Some(&value))?)
+    pub fn set_header(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_header(value.as_ref())?)
     }
-    pub fn header(self, value: impl AsControl) -> Result<Self> {
+    pub fn header(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_header(value)?;
         Ok(self)
     }
@@ -29453,20 +29453,20 @@ impl HeaderedItemsControl {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -29832,11 +29832,11 @@ impl HeaderedItemsControl {
     pub fn get_header(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_header()?.map(|raw| Control { raw }))
     }
-    pub fn set_header(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_header(Some(&value))?)
+    pub fn set_header(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_header(value.as_ref())?)
     }
-    pub fn header(self, value: impl AsControl) -> Result<Self> {
+    pub fn header(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_header(value)?;
         Ok(self)
     }
@@ -30000,20 +30000,20 @@ impl HeaderedSelectingItemsControl {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -30446,11 +30446,11 @@ impl HeaderedSelectingItemsControl {
     pub fn get_header(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_header()?.map(|raw| Control { raw }))
     }
-    pub fn set_header(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_header(Some(&value))?)
+    pub fn set_header(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_header(value.as_ref())?)
     }
-    pub fn header(self, value: impl AsControl) -> Result<Self> {
+    pub fn header(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_header(value)?;
         Ok(self)
     }
@@ -30614,20 +30614,20 @@ impl Popup {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -30816,11 +30816,11 @@ impl Popup {
     pub fn get_child(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_child()?.map(|raw| Control { raw }))
     }
-    pub fn set_child(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_child(Some(&value))?)
+    pub fn set_child(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_child(value.as_ref())?)
     }
-    pub fn child(self, value: impl AsControl) -> Result<Self> {
+    pub fn child(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_child(value)?;
         Ok(self)
     }
@@ -30896,11 +30896,11 @@ impl Popup {
     pub fn get_placement_target(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_placement_target()?.map(|raw| Control { raw }))
     }
-    pub fn set_placement_target(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_placement_target(Some(&value))?)
+    pub fn set_placement_target(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_placement_target(value.as_ref())?)
     }
-    pub fn placement_target(self, value: impl AsControl) -> Result<Self> {
+    pub fn placement_target(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_placement_target(value)?;
         Ok(self)
     }
@@ -30925,11 +30925,11 @@ impl Popup {
     pub fn get_overlay_input_pass_through_element(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_overlay_input_pass_through_element()?.map(|raw| Control { raw }))
     }
-    pub fn set_overlay_input_pass_through_element(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_overlay_input_pass_through_element(Some(&value))?)
+    pub fn set_overlay_input_pass_through_element(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_overlay_input_pass_through_element(value.as_ref())?)
     }
-    pub fn overlay_input_pass_through_element(self, value: impl AsControl) -> Result<Self> {
+    pub fn overlay_input_pass_through_element(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_overlay_input_pass_through_element(value)?;
         Ok(self)
     }
@@ -31137,11 +31137,11 @@ impl PopupFlyoutBase {
     pub fn get_overlay_input_pass_through_element(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_overlay_input_pass_through_element()?.map(|raw| Control { raw }))
     }
-    pub fn set_overlay_input_pass_through_element(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_overlay_input_pass_through_element(Some(&value))?)
+    pub fn set_overlay_input_pass_through_element(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_overlay_input_pass_through_element(value.as_ref())?)
     }
-    pub fn overlay_input_pass_through_element(self, value: impl AsControl) -> Result<Self> {
+    pub fn overlay_input_pass_through_element(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_overlay_input_pass_through_element(value)?;
         Ok(self)
     }
@@ -31322,20 +31322,20 @@ impl RangeBase {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -31861,20 +31861,20 @@ impl SelectingItemsControl {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -32454,20 +32454,20 @@ impl TemplatedControl {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -32940,20 +32940,20 @@ impl Thumb {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -33459,20 +33459,20 @@ impl ToggleButton {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -33798,11 +33798,11 @@ impl ToggleButton {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -33901,10 +33901,10 @@ impl ToggleButton {
     pub fn get_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_flyout(Some(&value.raw))?)
+    pub fn set_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_flyout(value)?;
         Ok(self)
     }
@@ -34100,20 +34100,20 @@ impl UniformGrid {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -34499,20 +34499,20 @@ impl ProgressBar {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -35077,20 +35077,20 @@ impl RadioButton {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -35416,11 +35416,11 @@ impl RadioButton {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -35519,10 +35519,10 @@ impl RadioButton {
     pub fn get_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_flyout(Some(&value.raw))?)
+    pub fn set_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_flyout(value)?;
         Ok(self)
     }
@@ -35729,20 +35729,20 @@ impl RefreshContainer {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -36068,11 +36068,11 @@ impl RefreshContainer {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -36291,20 +36291,20 @@ impl RelativePanel {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -36704,20 +36704,20 @@ impl RepeatButton {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -37043,11 +37043,11 @@ impl RepeatButton {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -37146,10 +37146,10 @@ impl RepeatButton {
     pub fn get_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_flyout(Some(&value.raw))?)
+    pub fn set_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_flyout(value)?;
         Ok(self)
     }
@@ -37332,20 +37332,20 @@ impl ScrollViewer {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -37671,11 +37671,11 @@ impl ScrollViewer {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -38027,20 +38027,20 @@ impl SelectableTextBlock {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -38605,20 +38605,20 @@ impl Separator {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -39091,20 +39091,20 @@ impl Arc {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -39538,20 +39538,20 @@ impl Ellipse {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -39969,20 +39969,20 @@ impl Line {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -40420,20 +40420,20 @@ impl Path {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -40862,20 +40862,20 @@ impl Polygon {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -41315,20 +41315,20 @@ impl Polyline {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -41768,20 +41768,20 @@ impl Rectangle {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -42215,20 +42215,20 @@ impl Sector {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -42658,20 +42658,20 @@ impl Shape {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -43089,20 +43089,20 @@ impl Slider {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -43681,20 +43681,20 @@ impl Spinner {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -44020,11 +44020,11 @@ impl Spinner {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -44229,20 +44229,20 @@ impl SplitButton {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -44568,11 +44568,11 @@ impl SplitButton {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -44632,10 +44632,10 @@ impl SplitButton {
     pub fn get_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_flyout(Some(&value.raw))?)
+    pub fn set_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_flyout(value)?;
         Ok(self)
     }
@@ -44813,20 +44813,20 @@ impl SplitView {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -45152,11 +45152,11 @@ impl SplitView {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -45252,11 +45252,11 @@ impl SplitView {
     pub fn get_pane(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_pane()?.map(|raw| Control { raw }))
     }
-    pub fn set_pane(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_pane(Some(&value))?)
+    pub fn set_pane(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_pane(value.as_ref())?)
     }
-    pub fn pane(self, value: impl AsControl) -> Result<Self> {
+    pub fn pane(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_pane(value)?;
         Ok(self)
     }
@@ -45476,20 +45476,20 @@ impl StackPanel {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -45870,20 +45870,20 @@ impl TabControl {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -46522,20 +46522,20 @@ impl TabItem {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -46861,11 +46861,11 @@ impl TabItem {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -46904,11 +46904,11 @@ impl TabItem {
     pub fn get_header(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_header()?.map(|raw| Control { raw }))
     }
-    pub fn set_header(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_header(Some(&value))?)
+    pub fn set_header(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_header(value.as_ref())?)
     }
-    pub fn header(self, value: impl AsControl) -> Result<Self> {
+    pub fn header(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_header(value)?;
         Ok(self)
     }
@@ -47114,20 +47114,20 @@ impl TableView {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -47735,20 +47735,20 @@ impl TableViewCell {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -48074,11 +48074,11 @@ impl TableViewCell {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -48258,11 +48258,11 @@ impl TableViewColumn {
     pub fn get_header(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_header()?.map(|raw| Control { raw }))
     }
-    pub fn set_header(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_header(Some(&value))?)
+    pub fn set_header(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_header(value.as_ref())?)
     }
-    pub fn header(self, value: impl AsControl) -> Result<Self> {
+    pub fn header(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_header(value)?;
         Ok(self)
     }
@@ -48467,20 +48467,20 @@ impl TableViewRow {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -48806,11 +48806,11 @@ impl TableViewRow {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -49004,20 +49004,20 @@ impl TextBlock {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -49524,20 +49524,20 @@ impl TextBox {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -50097,22 +50097,22 @@ impl TextBox {
     pub fn get_inner_left_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_inner_left_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_inner_left_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_inner_left_content(Some(&value))?)
+    pub fn set_inner_left_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_inner_left_content(value.as_ref())?)
     }
-    pub fn inner_left_content(self, value: impl AsControl) -> Result<Self> {
+    pub fn inner_left_content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_inner_left_content(value)?;
         Ok(self)
     }
     pub fn get_inner_right_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_inner_right_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_inner_right_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_inner_right_content(Some(&value))?)
+    pub fn set_inner_right_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_inner_right_content(value.as_ref())?)
     }
-    pub fn inner_right_content(self, value: impl AsControl) -> Result<Self> {
+    pub fn inner_right_content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_inner_right_content(value)?;
         Ok(self)
     }
@@ -50392,20 +50392,20 @@ impl ThemeVariantScope {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -50586,11 +50586,11 @@ impl ThemeVariantScope {
     pub fn get_child(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_child()?.map(|raw| Control { raw }))
     }
-    pub fn set_child(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_child(Some(&value))?)
+    pub fn set_child(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_child(value.as_ref())?)
     }
-    pub fn child(self, value: impl AsControl) -> Result<Self> {
+    pub fn child(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_child(value)?;
         Ok(self)
     }
@@ -50765,20 +50765,20 @@ impl TimePicker {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -51320,20 +51320,20 @@ impl ToggleSplitButton {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -51659,11 +51659,11 @@ impl ToggleSplitButton {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -51723,10 +51723,10 @@ impl ToggleSplitButton {
     pub fn get_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_flyout(Some(&value.raw))?)
+    pub fn set_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_flyout(value)?;
         Ok(self)
     }
@@ -51925,20 +51925,20 @@ impl ToggleSwitch {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -52264,11 +52264,11 @@ impl ToggleSwitch {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -52367,10 +52367,10 @@ impl ToggleSwitch {
     pub fn get_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_flyout(Some(&value.raw))?)
+    pub fn set_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_flyout(value)?;
         Ok(self)
     }
@@ -52419,22 +52419,22 @@ impl ToggleSwitch {
     pub fn get_on_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_on_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_on_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_on_content(Some(&value))?)
+    pub fn set_on_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_on_content(value.as_ref())?)
     }
-    pub fn on_content(self, value: impl AsControl) -> Result<Self> {
+    pub fn on_content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_on_content(value)?;
         Ok(self)
     }
     pub fn get_off_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_off_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_off_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_off_content(Some(&value))?)
+    pub fn set_off_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_off_content(value.as_ref())?)
     }
-    pub fn off_content(self, value: impl AsControl) -> Result<Self> {
+    pub fn off_content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_off_content(value)?;
         Ok(self)
     }
@@ -52608,20 +52608,20 @@ impl ToolTip {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -52947,11 +52947,11 @@ impl ToolTip {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -53219,20 +53219,20 @@ impl TransitioningContentControl {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -53558,11 +53558,11 @@ impl TransitioningContentControl {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -53844,20 +53844,20 @@ impl TreeView {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -54429,20 +54429,20 @@ impl TreeViewItem {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -54808,11 +54808,11 @@ impl TreeViewItem {
     pub fn get_header(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_header()?.map(|raw| Control { raw }))
     }
-    pub fn set_header(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_header(Some(&value))?)
+    pub fn set_header(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_header(value.as_ref())?)
     }
-    pub fn header(self, value: impl AsControl) -> Result<Self> {
+    pub fn header(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_header(value)?;
         Ok(self)
     }
@@ -55019,20 +55019,20 @@ impl UserControl {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -55358,11 +55358,11 @@ impl UserControl {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -55548,20 +55548,20 @@ impl Viewbox {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -55764,11 +55764,11 @@ impl Viewbox {
     pub fn get_child(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_child()?.map(|raw| Control { raw }))
     }
-    pub fn set_child(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_child(Some(&value))?)
+    pub fn set_child(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_child(value.as_ref())?)
     }
-    pub fn child(self, value: impl AsControl) -> Result<Self> {
+    pub fn child(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_child(value)?;
         Ok(self)
     }
@@ -55922,20 +55922,20 @@ impl Window {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }
@@ -56261,11 +56261,11 @@ impl Window {
     pub fn get_content(&self) -> Result<Option<Control>> {
         Ok(self.raw.get_content()?.map(|raw| Control { raw }))
     }
-    pub fn set_content(&self, value: impl AsControl) -> Result<()> {
-        let value = value.as_control()?;
-        Ok(self.raw.set_content(Some(&value))?)
+    pub fn set_content(&self, value: Option<&dyn AsControl>) -> Result<()> {
+        let value = value.map(|value| value.as_control()).transpose()?;
+        Ok(self.raw.set_content(value.as_ref())?)
     }
-    pub fn content(self, value: impl AsControl) -> Result<Self> {
+    pub fn content(self, value: Option<&dyn AsControl>) -> Result<Self> {
         self.set_content(value)?;
         Ok(self)
     }
@@ -56615,20 +56615,20 @@ impl WrapPanel {
     pub fn get_context_menu(&self) -> Result<Option<ContextMenu>> {
         Ok(self.raw.get_context_menu()?.map(|raw| ContextMenu { raw }))
     }
-    pub fn set_context_menu(&self, value: &ContextMenu) -> Result<()> {
-        Ok(self.raw.set_context_menu(Some(&value.raw))?)
+    pub fn set_context_menu(&self, value: Option<&ContextMenu>) -> Result<()> {
+        Ok(self.raw.set_context_menu(value.map(|value| &value.raw))?)
     }
-    pub fn context_menu(self, value: &ContextMenu) -> Result<Self> {
+    pub fn context_menu(self, value: Option<&ContextMenu>) -> Result<Self> {
         self.set_context_menu(value)?;
         Ok(self)
     }
     pub fn get_context_flyout(&self) -> Result<Option<FlyoutBase>> {
         Ok(self.raw.get_context_flyout()?.map(|raw| FlyoutBase { raw }))
     }
-    pub fn set_context_flyout(&self, value: &FlyoutBase) -> Result<()> {
-        Ok(self.raw.set_context_flyout(Some(&value.raw))?)
+    pub fn set_context_flyout(&self, value: Option<&FlyoutBase>) -> Result<()> {
+        Ok(self.raw.set_context_flyout(value.map(|value| &value.raw))?)
     }
-    pub fn context_flyout(self, value: &FlyoutBase) -> Result<Self> {
+    pub fn context_flyout(self, value: Option<&FlyoutBase>) -> Result<Self> {
         self.set_context_flyout(value)?;
         Ok(self)
     }

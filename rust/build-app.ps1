@@ -67,6 +67,9 @@ function Read-ConsumerManifest {
     foreach ($field in $script:PathFields) {
         $paths[$field] = Resolve-ManifestPath $manifestDirectory ([string]$document[$field])
     }
+    if ([IO.Path]::GetFileName($paths.generatedRegistryFile) -cne 'RustViewRegistry.g.cs') {
+        throw 'Invalid consumer manifest: generatedRegistryFile must be named RustViewRegistry.g.cs'
+    }
     foreach ($field in @('presentationProject', 'viewModelIr', 'cargoManifest')) {
         if (-not (Test-Path -LiteralPath $paths[$field] -PathType Leaf)) {
             throw "Invalid consumer manifest: $field does not exist: $($paths[$field])"
@@ -80,6 +83,7 @@ function Read-ConsumerManifest {
 function Invoke-ConsumerPackage {
     param([string]$ProducerRootPath, $Document)
     $paths = $Document._paths
+    Assert-ArtifactBundleDestination -BundlePath $paths.outputDirectory
     $rid = [string]$Document.rid
     $target = Get-RidTargetInfo -Rid $rid
     $rustoloniaRootPath = (Resolve-Path -LiteralPath $RustoloniaRoot).Path
@@ -128,7 +132,8 @@ function Invoke-ConsumerPackage {
         Invoke-Logged -Command $cargoArgs
     }
     finally {
-        [Environment]::SetEnvironmentVariable('CARGO_TARGET_DIR', $previousCargo, 'Process')
+        if ($null -eq $previousCargo) { Remove-Item Env:CARGO_TARGET_DIR -ErrorAction SilentlyContinue }
+        else { [Environment]::SetEnvironmentVariable('CARGO_TARGET_DIR', $previousCargo, 'Process') }
     }
     $executable = Join-Path $cargoTarget $target.Triple $profile "$($Document.binary)$($target.ExeExtension)"
     if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
@@ -151,7 +156,8 @@ function Invoke-ConsumerPackage {
         if (-not (Test-Path -LiteralPath $hostFile -PathType Leaf)) {
             throw "NativeAOT host was not produced: $hostFile"
         }
-        Prepare-ArtifactBundle -BundlePath $bundle | Out-Null
+        Invoke-ArtifactBundleTransaction -BundlePath $bundle -Rid $rid -Build {
+        param($bundle)
         Copy-BundleFiles -SourceDirectory $staging -DestinationDirectory $bundle -HostFile $hostFile -Rid $rid
         Copy-Item -LiteralPath $executable -Destination (Join-Path $bundle (Split-Path -Leaf $executable))
         Copy-BundleNotices -ProducerRoot $ProducerRootPath -RustoloniaRoot $rustoloniaRootPath -DestinationDirectory $bundle
@@ -166,6 +172,7 @@ function Invoke-ConsumerPackage {
             -ProjectAssetsJsonPath $consumerHostAssets `
             -ProducerPin $consumerProducerPin
         Write-Checksums -Bundle $bundle
+        }
     }
     finally {
         if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }

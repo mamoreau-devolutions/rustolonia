@@ -45,6 +45,7 @@ if (-not $OutputRoot) {
 }
 $OutputRoot = Resolve-CallerRelativePath -PathValue $OutputRoot
 $destination = Join-Path $OutputRoot $Rid
+Assert-ArtifactBundleDestination -BundlePath $destination
 
 $publishProperties = New-HostPublishProperties -ProducerRoot $resolvedProducerRoot -RustoloniaRoot $resolvedRustoloniaRoot -Rid $Rid -HostPlatform $($target.Platform)
 if (-not [string]::IsNullOrWhiteSpace($PresentationProject)) {
@@ -67,7 +68,9 @@ if (-not (Test-Path -LiteralPath $hostFile -PathType Leaf)) {
     throw "NativeAOT host was not produced at $hostFile"
 }
 
-Prepare-ArtifactBundle -BundlePath $destination | Out-Null
+$finalDestination = $destination
+Invoke-ArtifactBundleTransaction -BundlePath $finalDestination -Rid $Rid -Build {
+param($destination)
 Write-Host "==> Copying host and native dependencies into $destination"
 Copy-BundleFiles -SourceDirectory $publishDir -DestinationDirectory $destination -HostFile $hostFile -Rid $Rid
 Copy-BundleNotices -ProducerRoot $resolvedProducerRoot -RustoloniaRoot $resolvedRustoloniaRoot -DestinationDirectory $destination
@@ -87,7 +90,8 @@ if (-not $SkipCargoBuild -and -not $env:AVN_PACKAGE_SKIP_CARGO_BUILD) {
         Invoke-Logged -Command $cargoCommand
     }
     finally {
-        [Environment]::SetEnvironmentVariable('CARGO_TARGET_DIR', $previousCargo, 'Process')
+        if ($null -eq $previousCargo) { Remove-Item Env:CARGO_TARGET_DIR -ErrorAction SilentlyContinue }
+        else { [Environment]::SetEnvironmentVariable('CARGO_TARGET_DIR', $previousCargo, 'Process') }
     }
     $profile = if ($Configuration -eq 'Release') { 'release' } else { 'debug' }
     $exePath = Join-Path $cargoTarget $target.Triple $profile 'examples' "$Example$($target.ExeExtension)"
@@ -106,6 +110,7 @@ $producerPin = git -C $resolvedProducerRoot rev-parse HEAD 2>$null
     -ProjectAssetsJsonPath $hostAssets `
     -ProducerPin $producerPin
 Write-Checksums -Bundle $destination
+}
 
-Write-Host "Package layout ready at $destination"
-Get-ChildItem -LiteralPath $destination | Select-Object Name, Length | Format-Table -AutoSize
+Write-Host "Package layout ready at $finalDestination"
+Get-ChildItem -LiteralPath $finalDestination | Select-Object Name, Length | Format-Table -AutoSize

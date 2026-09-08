@@ -86,10 +86,12 @@ public static class OwnedOutputs
 
     public static OwnedOutputCheckResult Check(
         string generatorId,
-        IReadOnlyDictionary<string, string> files)
+        IReadOnlyDictionary<string, string> files,
+        IEnumerable<string>? outputDirectories = null)
     {
+        outputDirectories = outputDirectories?.ToArray();
         var mismatches = new List<string>();
-        ValidateDestinations(generatorId, files);
+        ValidateDestinations(generatorId, files, outputDirectories);
 
         foreach (var (path, expected) in files.OrderBy(entry => entry.Key, StringComparer.OrdinalIgnoreCase))
         {
@@ -108,7 +110,7 @@ public static class OwnedOutputs
                 mismatches.Add($"DIFFERENT: {path}");
         }
 
-        foreach (var directory in GroupByDirectory(files).Keys)
+        foreach (var directory in GroupByDirectory(files, outputDirectories).Keys)
         {
             if (!Directory.Exists(directory))
                 continue;
@@ -142,10 +144,12 @@ public static class OwnedOutputs
         return new OwnedOutputCheckResult { Mismatches = mismatches };
     }
 
-    public static void Write(string generatorId, IReadOnlyDictionary<string, string> files)
+    public static void Write(string generatorId, IReadOnlyDictionary<string, string> files,
+        IEnumerable<string>? outputDirectories = null)
     {
-        ValidateDestinations(generatorId, files);
-        var groups = GroupByDirectory(files);
+        outputDirectories = outputDirectories?.ToArray();
+        ValidateDestinations(generatorId, files, outputDirectories);
+        var groups = GroupByDirectory(files, outputDirectories);
         var obsolete = new List<string>();
 
         foreach (var (path, _) in files)
@@ -265,11 +269,12 @@ public static class OwnedOutputs
         }
     }
 
-    private static void ValidateDestinations(string generatorId, IReadOnlyDictionary<string, string> files)
+    private static void ValidateDestinations(string generatorId, IReadOnlyDictionary<string, string> files,
+        IEnumerable<string>? outputDirectories)
     {
         if (!IsSafeGeneratorId(generatorId))
             throw new InvalidOperationException($"Unsafe generator id '{generatorId}'.");
-        if (files.Count == 0)
+        if (files.Count == 0 && (outputDirectories is null || !outputDirectories.Any()))
             throw new InvalidOperationException("Generation produced no outputs.");
 
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -289,9 +294,16 @@ public static class OwnedOutputs
     }
 
     private static Dictionary<string, List<KeyValuePair<string, string>>> GroupByDirectory(
-        IReadOnlyDictionary<string, string> files)
+        IReadOnlyDictionary<string, string> files, IEnumerable<string>? outputDirectories)
     {
         var groups = new Dictionary<string, List<KeyValuePair<string, string>>>(StringComparer.OrdinalIgnoreCase);
+        // Keep configured directories in scope even when their last generated file was removed.
+        foreach (var directory in outputDirectories ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(directory))
+                throw new InvalidOperationException("Generated output directory must not be empty.");
+            groups.TryAdd(Path.GetFullPath(directory), []);
+        }
         foreach (var entry in files)
         {
             var directory = Path.GetDirectoryName(Path.GetFullPath(entry.Key))

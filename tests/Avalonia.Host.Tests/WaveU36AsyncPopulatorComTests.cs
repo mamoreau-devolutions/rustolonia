@@ -12,6 +12,32 @@ namespace Avalonia.Host.Tests;
 public class WaveU36AsyncPopulatorComTests
 {
     [Fact]
+    public void Materializing_an_owned_variant_releases_and_resets_its_string()
+    {
+        var variant = AvnVariant.FromObject("owned suggestion");
+        try
+        {
+            Assert.NotEqual(0, variant.Utf16);
+            Assert.Equal("owned suggestion", AvnPopulatorBridge.MaterializeVariant(ref variant));
+            Assert.Equal(0, variant.Utf16);
+            Assert.Equal(AvnVariant.TagNone, variant.Tag);
+        }
+        finally
+        {
+            variant.FreeUtf16();
+        }
+    }
+
+    [Fact]
+    public void Materialize_copies_owned_strings_and_preserves_scalar_values()
+    {
+        object?[] expected = ["first", "", "日本語 😀", 42, 1.5, true, null];
+        var list = AvnObjectList.FromManaged(expected)!;
+        for (var iteration = 0; iteration < 100; iteration++)
+            Assert.Equal(expected, AvnPopulatorBridge.Materialize(list));
+    }
+
+    [Fact]
     public async Task Async_populator_round_trips_through_the_ccw()
     {
         using var app = UnitTestApplication.Start(TestServices.StyledWindow);

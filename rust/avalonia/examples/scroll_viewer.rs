@@ -9,7 +9,7 @@ fn command_button(
     action: impl FnMut(()) + Send + 'static,
 ) -> avalonia::Result<Button> {
     Button::new()?
-        .content(TextBlock::new()?.text(label)?)?
+        .content(Some(&TextBlock::new()?.text(label)?))?
         .on_click(scope, action)
 }
 
@@ -29,7 +29,7 @@ fn main() -> avalonia::Result<()> {
             .vertical_scroll_bar_visibility(ScrollBarVisibility::Auto)?
             .allow_auto_hide(true)?
             .scroll_inertia_enabled(true)?
-            .content(content)?
+            .content(Some(&content))?
             .on_scroll_changed(scope, move |_| {
                 scroll_events += 1;
                 status_for_handler
@@ -39,7 +39,7 @@ fn main() -> avalonia::Result<()> {
 
         let viewer_for_auto_hide = viewer.clone();
         let auto_hide = ToggleSwitch::new()?
-            .content(TextBlock::new()?.text("Allow auto hide")?)?
+            .content(Some(&TextBlock::new()?.text("Allow auto hide")?))?
             .checked(Some(true))?;
         let auto_hide_for_handler = auto_hide.clone();
         let auto_hide = auto_hide.on_is_checked_changed(scope, move |_| {
@@ -55,7 +55,7 @@ fn main() -> avalonia::Result<()> {
 
         let viewer_for_inertia = viewer.clone();
         let inertia = ToggleSwitch::new()?
-            .content(TextBlock::new()?.text("Enable inertia")?)?
+            .content(Some(&TextBlock::new()?.text("Enable inertia")?))?
             .checked(Some(true))?;
         let inertia_for_handler = inertia.clone();
         let inertia = inertia.on_is_checked_changed(scope, move |_| {
@@ -70,8 +70,8 @@ fn main() -> avalonia::Result<()> {
         })?;
 
         let viewer_for_deferred = viewer.clone();
-        let deferred =
-            ToggleSwitch::new()?.content(TextBlock::new()?.text("Enable deferred scrolling")?)?;
+        let deferred = ToggleSwitch::new()?
+            .content(Some(&TextBlock::new()?.text("Enable deferred scrolling")?))?;
         let deferred_for_handler = deferred.clone();
         let deferred = deferred.on_is_checked_changed(scope, move |_| {
             viewer_for_deferred
@@ -105,8 +105,8 @@ fn main() -> avalonia::Result<()> {
             })?)?;
 
         scope.mount(
-            Window::new()?.title("ScrollViewer")?.content(
-                StackPanel::new()?
+            Window::new()?.title("ScrollViewer")?.content(Some(
+                &StackPanel::new()?
                     .spacing(8.0)?
                     .child(TextBlock::new()?.text("ScrollViewer controls")?)?
                     .child(auto_hide)?
@@ -115,7 +115,7 @@ fn main() -> avalonia::Result<()> {
                     .child(commands)?
                     .child(status)?
                     .child(viewer)?,
-            )?,
+            ))?,
         )
     })
 }

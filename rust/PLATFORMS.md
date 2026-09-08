@@ -19,27 +19,46 @@ Linux publishes the host with a `$ORIGIN` runpath. Consequently
 `Avalonia.Host.so` without requiring a process-wide `LD_LIBRARY_PATH`.
 
 macOS publishes against `Avalonia.Native` and loads
-`libAvaloniaNative.dylib` from `@loader_path`. `build.ps1` and `package.ps1`
-first invoke the repository's `xcodebuild` project with
+`libAvaloniaNative.dylib` from `@loader_path`. `build.ps1`, `package.ps1`,
+and `build-app.ps1` generate the native COM headers and invoke the producer's
+`xcodebuild` project with an explicit target `ARCHS` and
 `CONFIGURATION_BUILD_DIR=Build/Products/Release`, so the generated
 `libAvalonia.Native.OSX.dylib` is included by `Avalonia.Native` as
-`libAvaloniaNative.dylib` in the NativeAOT publish output. The scripts must
-run on a Mac whose CPU architecture matches the requested `osx-*` RID; they
-reject cross-architecture macOS packaging so Xcode cannot produce a dylib that
-does not match the host RID.
+`libAvaloniaNative.dylib` in the NativeAOT publish output.
 
-All build entry points run `cargo test --workspace` against the published host,
-so the requested RID architecture must match the native runner CPU. `build.ps1`
-validates this for both Linux and macOS; `build.ps1` uses
-`RuntimeInformation.OSArchitecture`, rather than the potentially emulated
-process architecture, to enforce it on Windows.
+`build.ps1` publishes the host and runs `cargo test --workspace`. It requires
+the requested architecture to match `RuntimeInformation.OSArchitecture` on
+all three operating systems. `regenerate-and-build.ps1` regenerates sources,
+builds managed code unless skipped, and runs tests only with `-Test`.
+
+`package.ps1` and `build-app.ps1` build delivery bundles; they do not run the
+workspace tests. Both allow cross-architecture packaging on the same OS,
+with a warning that the target binary cannot be smoke-launched on the build
+runner. Install the requested Rust target and its native linker/toolchain.
+Linux cross-builds also require the target `objcopy` (for example,
+`aarch64-linux-gnu-objcopy`) and a configured Cargo cross-linker. Cross-OS
+packaging is rejected. macOS packages use the requested target architecture
+for Xcode even when the build runner has a different architecture.
+
+Bundle construction, signing, SBOM generation, and checksums happen in an
+isolated staging directory. Only a completed bundle replaces an existing
+empty or Rustolonia-owned destination; a failed build leaves the previous
+bundle intact. External consumer manifests must name their
+`generatedRegistryFile` **`RustViewRegistry.g.cs`**, in any chosen directory.
+
+CI uploads `.tar.gz` bundles rather than raw directories, preserving the hidden
+ownership marker and Unix execute permissions. It downloads and extracts the
+actual uploaded archives before checking checksums. Native jobs smoke-launch
+the extracted sample; cross-build jobs verify checksums and Unix execute
+permissions without attempting to execute the target binary. CI also runs
+the patched Avalonia table accessibility, column-width, and viewport tests.
 
 ## Linux build
 
-Initialize the DBus source submodule once:
+Initialize the producer and its dependencies from the Rustolonia root:
 
 ```bash
-git submodule update --init external/Avalonia.DBus
+git submodule update --init --recursive
 ```
 
 Then publish the X11 NativeAOT host and run the complete Rust workspace:
@@ -48,11 +67,13 @@ Then publish the X11 NativeAOT host and run the complete Rust workspace:
 pwsh ./rust/build.ps1
 ```
 
-Pass `arm64` for Linux ARM64. `DOTNET` can select a non-default SDK binary.
-WSL users can keep expensive intermediate files on the Linux filesystem:
+Pass `-Architecture arm64` for native Linux ARM64. The PowerShell entry points
+invoke `dotnet` from `PATH`; they do not read a `DOTNET` override. WSL users can
+select a local SDK through `PATH` and keep intermediate files on the Linux
+filesystem:
 
 ```bash
-DOTNET="$HOME/.dotnet/dotnet" \
+PATH="$HOME/.dotnet:$PATH" \
 AVN_DOTNET_ARTIFACTS="$HOME/.cache/avalonia-rust/dotnet-linux-x64" \
 CARGO_TARGET_DIR="$HOME/.cache/avalonia-rust/cargo-linux-x64" \
 pwsh ./rust/build.ps1

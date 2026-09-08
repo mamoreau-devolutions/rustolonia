@@ -62,7 +62,7 @@ fn main() -> avalonia::Result<()> {
         let horizontal_for_show = horizontal.clone();
         let vertical_for_show = vertical.clone();
         let show_text = CheckBox::new()?
-            .content(TextBlock::new()?.text("Show Progress Text")?)?
+            .content(Some(&TextBlock::new()?.text("Show Progress Text")?))?
             .checked(Some(true))?;
         let show_text_for_handler = show_text.clone();
         let show_text = show_text.on_is_checked_changed(scope, move |_| {
@@ -81,7 +81,7 @@ fn main() -> avalonia::Result<()> {
         let horizontal_for_indeterminate = horizontal.clone();
         let vertical_for_indeterminate = vertical.clone();
         let indeterminate =
-            CheckBox::new()?.content(TextBlock::new()?.text("Toggle Indeterminate")?)?;
+            CheckBox::new()?.content(Some(&TextBlock::new()?.text("Toggle Indeterminate")?))?;
         let indeterminate_for_handler = indeterminate.clone();
         let indeterminate = indeterminate.on_is_checked_changed(scope, move |_| {
             let value = indeterminate_for_handler
@@ -97,8 +97,8 @@ fn main() -> avalonia::Result<()> {
         })?;
 
         scope.mount(
-            Window::new()?.title("ProgressBar")?.content(
-                StackPanel::new()?
+            Window::new()?.title("ProgressBar")?.content(Some(
+                &StackPanel::new()?
                     .spacing(8.0)?
                     .child(TextBlock::new()?.text("A progress bar control")?)?
                     .child(TextBlock::new()?.text("Progress Text Format")?)?
@@ -109,7 +109,7 @@ fn main() -> avalonia::Result<()> {
                     .child(vertical)?
                     .child(horizontal_slider)?
                     .child(vertical_slider)?,
-            )?,
+            ))?,
         )
     })
 }

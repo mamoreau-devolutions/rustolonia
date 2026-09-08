@@ -43,8 +43,20 @@ internal static class AvnPopulatorBridge
         {
             if (items.GetAt(index, out var variant) < 0)
                 break;
-            result.Add(variant.ToObject()!);
+            result.Add(MaterializeVariant(ref variant)!);
         }
         return result;
+    }
+
+    internal static object? MaterializeVariant(ref AvnVariant variant)
+    {
+        try
+        {
+            return variant.ToObject();
+        }
+        finally
+        {
+            variant.FreeUtf16();
+        }
     }
 }
