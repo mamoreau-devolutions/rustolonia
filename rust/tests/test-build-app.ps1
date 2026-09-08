@@ -478,7 +478,8 @@ Add-Content -LiteralPath (Join-Path $PSScriptRoot 'signatures.log') -Value $Arti
             if ($args[0] -eq 'fmt') { throw 'Consumer builds must not format handwritten Rust.' }
             if ($args[0] -eq 'metadata') {
                 Assert-True (($args -contains '--locked') -eq $expectLockedMetadata) 'Only explicit lockfile updates may resolve without --locked.'
-                return (@{ workspace_root = $consumer } | ConvertTo-Json)
+                $workspaceJson = ConvertTo-Json -InputObject $consumer -Compress
+                return '{"workspace_root":' + $workspaceJson + ',"packages":[{"features":{"USB":[],"usb":[]}}]}'
             }
             if ($args -contains '--bin') { Assert-True ($args -contains '--locked') 'Consumer Cargo builds must be locked.' }
             if ($failureStage -eq 'cargo') { throw 'injected cargo failure' }

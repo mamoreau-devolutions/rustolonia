@@ -93,7 +93,7 @@ function Invoke-ConsumerPackage {
     # Cargo finds the owning workspace lockfile, which may be above the manifest.
     $metadataCommand = @('cargo', 'metadata', '--format-version', '1', '--manifest-path', $paths.cargoManifest)
     if (-not $UpdateLockFile) { $metadataCommand += '--locked' }
-    $metadata = Invoke-Logged -WorkingDirectory $Document._manifestDirectory -Command $metadataCommand | ConvertFrom-Json
+    $metadata = Invoke-Logged -WorkingDirectory $Document._manifestDirectory -Command $metadataCommand | ConvertFrom-Json -AsHashtable
     $cargoLockPath = Join-Path $metadata.workspace_root 'Cargo.lock'
     $hostProject = Join-Path $rustoloniaRootPath 'host' 'Avalonia.Host.csproj'
     $projectionTool = Join-Path $rustoloniaRootPath 'projection' 'Avalonia.ViewModelProjection.Tool' 'Avalonia.ViewModelProjection.Tool.csproj'
