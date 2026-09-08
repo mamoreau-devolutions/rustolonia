@@ -226,6 +226,94 @@ function Get-CurrentRuntimeArchitecture {
     }
 }
 
+function Get-DefaultConsumerRid {
+    $platform = if ($IsWindows) { 'win' } elseif ($IsLinux) { 'linux' } elseif ($IsMacOS) { 'osx' }
+        else { throw 'Unsupported consumer platform.' }
+    return "$platform-$(Get-CurrentRuntimeArchitecture)"
+}
+
+function Assert-ConsumerSource {
+    param([string]$ProducerRoot, [string]$RustoloniaRoot)
+
+    $release = Get-Content -LiteralPath (Join-Path $RustoloniaRoot 'rust' 'release-manifest.json') -Raw | ConvertFrom-Json
+    $revision = & git -C $ProducerRoot rev-parse HEAD
+    if ($LASTEXITCODE -ne 0 -or $revision -ne $release.producerPin) {
+        throw "Producer revision must be $($release.producerPin); found '$revision'. Initialize the pinned producer before building."
+    }
+    foreach ($patch in $release.patches) {
+        $path = Join-Path $RustoloniaRoot $patch.path
+        if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $patch.sha256) {
+            throw "Producer patch hash mismatch: $path"
+        }
+        $PSNativeCommandUseErrorActionPreference = $false
+        & git -C $ProducerRoot apply --reverse --check $path 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Producer patch is missing or modified: $path. Run avalonia-patches/apply-avalonia-patches.ps1 -AvaloniaRoot `"$ProducerRoot`"."
+        }
+    }
+    $submodules = & git -C $ProducerRoot submodule status --recursive
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect producer submodule revisions.' }
+    if (@($submodules | Where-Object { $_ -match '^[-+U]' }).Count -gt 0) {
+        throw "Producer submodules are missing or at the wrong revision. Run: git -C `"$ProducerRoot`" submodule update --init --recursive"
+    }
+}
+
+function Assert-ConsumerTools {
+    param([string]$Rid, [string]$RustoloniaRoot, [string]$ConsumerRoot)
+
+    Assert-RidMatchesHost -Rid $Rid
+    foreach ($tool in @('git', 'dotnet', 'cargo', 'rustc', 'rustup')) {
+        if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "Required consumer build tool '$tool' is missing." }
+    }
+    $sdk = (Get-Content -LiteralPath (Join-Path $RustoloniaRoot 'global.json') -Raw | ConvertFrom-Json).sdk
+    $minimum = [version]$sdk.version
+    foreach ($directory in @($RustoloniaRoot, $ConsumerRoot)) {
+        Push-Location $directory
+        try {
+            $selected = & dotnet --version
+            if ($LASTEXITCODE -ne 0) { throw "Cannot select the supported .NET SDK in $directory." }
+            $version = $null
+            if (-not [version]::TryParse($selected, [ref]$version) -or
+                $version.Major -ne $minimum.Major -or $version.Minor -ne $minimum.Minor -or $version -lt $minimum) {
+                throw "Unsupported .NET SDK '$selected' in $directory. Use Rustolonia global.json ($($sdk.version), $($sdk.rollForward))."
+            }
+        }
+        finally { Pop-Location }
+    }
+    $target = Get-RidTargetInfo -Rid $Rid
+    $installed = & rustup target list --installed
+    if ($LASTEXITCODE -ne 0 -or $installed -notcontains $target.Triple) {
+        throw "Rust target '$($target.Triple)' is required. Run: rustup target add $($target.Triple)"
+    }
+    if ($IsWindows) {
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio' 'Installer' 'vswhere.exe'
+        if (-not (Test-Path -LiteralPath $vswhere)) { throw 'NativeAOT requires Visual Studio with Desktop development with C++ and a Windows SDK (vswhere not found).' }
+        $component = if ($target.Arch -eq 'arm64') { 'Microsoft.VisualStudio.Component.VC.Tools.ARM64' } else { 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64' }
+        $installation = & $vswhere -latest -products '*' -requires $component -property installationPath
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($installation)) { throw "Install Visual Studio C++ tools for $($target.Arch) and a Windows SDK." }
+        $kits = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits' '10' 'Lib'
+        if (-not (Test-Path -LiteralPath $kits) -or
+            @(Get-ChildItem -LiteralPath $kits -Directory | Where-Object { Test-Path (Join-Path $_.FullName 'um' $target.Arch 'kernel32.lib') }).Count -eq 0) {
+            throw "Install the Windows SDK libraries for $($target.Arch)."
+        }
+    }
+    else {
+        $tools = if ($IsMacOS) { @('xcodebuild', 'xcrun', 'clang') } else { @('clang', 'cc', 'objcopy', 'pkg-config') }
+        foreach ($tool in $tools) {
+            if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "NativeAOT requires '$tool' for $Rid." }
+        }
+        if ($IsLinux) {
+            & pkg-config --exists zlib
+            if ($LASTEXITCODE -ne 0) { throw 'NativeAOT requires zlib development files (zlib1g-dev or zlib-devel).' }
+            $null = Resolve-LinuxCrossObjCopyName -Rid $Rid -CurrentArchitecture (Get-CurrentRuntimeArchitecture)
+        }
+        else {
+            & xcrun --find clang
+            if ($LASTEXITCODE -ne 0) { throw 'Select an installed Xcode toolchain with xcode-select.' }
+        }
+    }
+}
+
 function Assert-RidMatchesHost {
     param(
         [Parameter(Mandatory)][string]$Rid

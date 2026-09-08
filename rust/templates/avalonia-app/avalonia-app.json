@@ -9,7 +9,7 @@
   "cargoManifest": "Cargo.toml",
   "packageName": "__AVALONIA_APP_NAME__",
   "binary": "__AVALONIA_APP_NAME__",
-  "rid": "win-x64",
+  "rid": "__CONSUMER_RID__",
   "configuration": "Release",
-  "outputDirectory": "artifacts/win-x64"
+  "outputDirectory": "artifacts/__CONSUMER_RID__"
 }

@@ -50,7 +50,7 @@ function Test-NativeConsumer {
     $previousSigner = $env:AVALONIA_RUST_SIGN_COMMAND
     try {
         Remove-Item Env:AVALONIA_RUST_SIGN_COMMAND -ErrorAction SilentlyContinue
-        & (Join-Path $root 'rust' 'build-app.ps1') -ProducerRoot $producer -Manifest $manifestPath
+        & (Join-Path $root 'rust' 'build-app.ps1') -ProducerRoot $producer -Manifest $manifestPath -UpdateLockFile
     }
     finally {
         if ($null -ne $previousSigner) { $env:AVALONIA_RUST_SIGN_COMMAND = $previousSigner }
@@ -315,22 +315,94 @@ Add-Content -LiteralPath (Join-Path $PSScriptRoot 'signatures.log') -Value $Arti
     $rustoloniaPath = $root.Replace('\', '/')
     $producerPath = $fakeProducer.Replace('\', '/')
     $manifestPath = (Join-Path $consumer 'avalonia-app.json').Replace('\', '/')
-    $expectedCommand = "pwsh `"$rustoloniaPath/rust/build-app.ps1`" -ProducerRoot `"$producerPath`" -Manifest `"$manifestPath`""
+    $expectedCommand = "pwsh `"$rustoloniaPath/rust/build-app.ps1`" -ProducerRoot `"$producerPath`" -Manifest `"$manifestPath`" -UpdateLockFile"
     Assert-True ($scriptText.Contains($expectedCommand)) 'Printed build arguments must preserve exact spaced paths.'
     $cargoText = Get-Content -LiteralPath (Join-Path $consumer 'Cargo.toml') -Raw
-    Assert-True ($cargoText.Contains("path = `"$rustoloniaPath/rust/avalonia`"")) 'Cargo must reference Rustolonia rather than the producer.'
+    $relativeRustolonia = [IO.Path]::GetRelativePath($consumer, $root).Replace('\', '/')
+    Assert-True ($cargoText.Contains("path = `"$relativeRustolonia/rust/avalonia`"")) 'Cargo must reference Rustolonia relatively rather than the producer.'
     $projectText = Get-Content -LiteralPath (Join-Path $consumer 'managed' 'Consumer.Presentation.csproj') -Raw
-    Assert-True ($projectText.Contains($producerPath) -and $projectText.Contains($rustoloniaPath) -and -not $projectText.Contains('__AVALONIA_PRODUCER_ROOT__')) 'Presentation roots must be substituted.'
+    $managedRoot = Join-Path $consumer 'managed'
+    Assert-True ($projectText.Contains([IO.Path]::GetRelativePath($managedRoot, $fakeProducer).Replace('\', '/')) -and
+        $projectText.Contains([IO.Path]::GetRelativePath($managedRoot, $root).Replace('\', '/')) -and
+        $projectText.Contains('$(MSBuildThisFileDirectory)') -and -not $projectText.Contains('__MANAGED_')) 'Presentation roots must be project-relative.'
+    Assert-True ((Get-Content (Join-Path $consumer 'global.json') -Raw) -eq (Get-Content (Join-Path $root 'global.json') -Raw)) 'Consumer must inherit the supported SDK policy.'
+    $scaffoldManifest = Get-Content (Join-Path $consumer 'avalonia-app.json') -Raw | ConvertFrom-Json
+    Assert-True ($scaffoldManifest.rid -eq (Get-DefaultConsumerRid) -and $scaffoldManifest.outputDirectory -eq "artifacts/$($scaffoldManifest.rid)") 'Scaffold must default to host OS/architecture.'
+    Assert-True (-not (Test-Path (Join-Path $consumer 'Cargo.lock'))) 'Scaffold must leave initial dependency resolution explicit.'
     Assert-Throws { & (Join-Path $root 'rust' 'new-app.ps1') -Name demo_app -Destination $consumer -ProducerRoot $fakeProducer -RustoloniaRoot $root } 'already exists'
     $invalidDestination = Join-Path $scratch 'invalid-consumer'
     Assert-Throws { & (Join-Path $root 'rust' 'new-app.ps1') -Name demo_app -Destination $invalidDestination -ProducerRoot (Join-Path $scratch 'missing-producer') -RustoloniaRoot $root } 'does not exist'
     Assert-True (-not (Test-Path -LiteralPath $invalidDestination)) 'Invalid roots must not create an output directory.'
     Push-Location $scratch
     try {
-        & (Join-Path $root 'rust' 'new-app.ps1') -Name relative_app -Destination 'relative app' -ProducerRoot $fakeProducer -RustoloniaRoot $root | Out-Null
+        & (Join-Path $root 'rust' 'new-app.ps1') -Name relative_app -Destination 'relative app' -ProducerRoot $fakeProducer -RustoloniaRoot $root -Rid linux-arm64 | Out-Null
         Assert-True (Test-Path -LiteralPath (Join-Path $scratch 'relative app' 'Cargo.toml')) 'Relative scaffolds must use the caller location.'
+        Assert-True ((Get-Content (Join-Path $scratch 'relative app' 'avalonia-app.json') -Raw | ConvertFrom-Json).rid -eq 'linux-arm64') 'Explicit RID must override host default.'
     }
     finally { Pop-Location }
+
+    & {
+        $release = Get-Content (Join-Path $root 'rust' 'release-manifest.json') -Raw | ConvertFrom-Json
+        $sourceCase = 'valid'
+        function git {
+            $global:LASTEXITCODE = 0
+            if ($args -contains 'rev-parse') {
+                if ($sourceCase -eq 'revision') { return 'wrong-revision' }
+                return $release.producerPin
+            }
+            if ($args -contains 'apply' -and $sourceCase -eq 'patch') { $global:LASTEXITCODE = 1 }
+            if ($args -contains 'submodule' -and $sourceCase -eq 'submodule') { return '-012345 external/missing' }
+        }
+        Assert-ConsumerSource -ProducerRoot $fakeProducer -RustoloniaRoot $root
+        foreach ($case in @(
+                @{ Name = 'revision'; Error = 'Producer revision must be' },
+                @{ Name = 'patch'; Error = 'patch is missing or modified' },
+                @{ Name = 'submodule'; Error = 'submodules are missing or at the wrong revision' }
+            )) {
+            $sourceCase = $case.Name
+            Assert-Throws { Assert-ConsumerSource -ProducerRoot $fakeProducer -RustoloniaRoot $root } $case.Error
+        }
+        $sourceCase = 'valid'
+        $badReleaseRoot = Join-Path $scratch 'bad release'
+        New-Item -ItemType Directory (Join-Path $badReleaseRoot 'rust') -Force | Out-Null
+        $release.patches[0].path = 'tampered.patch'
+        Set-Content (Join-Path $badReleaseRoot 'tampered.patch') 'tampered'
+        $release | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $badReleaseRoot 'rust' 'release-manifest.json')
+        Assert-Throws { Assert-ConsumerSource -ProducerRoot $fakeProducer -RustoloniaRoot $badReleaseRoot } 'patch hash mismatch'
+        function dotnet { $global:LASTEXITCODE = 0; '9.0.100' }
+        Assert-Throws { Assert-ConsumerTools -Rid (Get-DefaultConsumerRid) -RustoloniaRoot $root -ConsumerRoot $consumer } 'Unsupported .NET SDK'
+    }
+
+    # A tiny local dependency exercises real Cargo lock and relocation behavior without network access.
+    $layout = Join-Path $scratch 'portable layout'
+    $portableRoot = Join-Path $layout 'rustolonia'
+    $portableCrate = Join-Path $portableRoot 'rust' 'avalonia'
+    New-Item -ItemType Directory (Join-Path $portableCrate 'src') -Force | Out-Null
+    Copy-Item (Join-Path $root 'global.json') (Join-Path $portableRoot 'global.json')
+    Set-Content (Join-Path $portableCrate 'Cargo.toml') "[package]`nname = `"avalonia`"`nversion = `"0.1.0`"`nedition = `"2021`""
+    Set-Content (Join-Path $portableCrate 'src' 'lib.rs') ''
+    $portableConsumer = Join-Path $layout 'consumer'
+    & (Join-Path $root 'rust' 'new-app.ps1') -Name portable_app -Destination $portableConsumer -ProducerRoot $portableRoot -RustoloniaRoot $portableRoot | Out-Null
+    $portableManifest = Join-Path $portableConsumer 'Cargo.toml'
+    Assert-Throws { Invoke-Logged -Command @('cargo', 'metadata', '--offline', '--locked', '--format-version', '1', '--manifest-path', $portableManifest) } 'exit code'
+    Invoke-Logged -Command @('cargo', 'metadata', '--offline', '--format-version', '1', '--manifest-path', $portableManifest) | Out-Null
+    $lockHash = (Get-FileHash (Join-Path $portableConsumer 'Cargo.lock')).Hash
+    $movedLayout = Join-Path $scratch 'moved layout'
+    Move-Item -LiteralPath $layout -Destination $movedLayout
+    $portableConsumer = Join-Path $movedLayout 'consumer'
+    $portableManifest = Join-Path $portableConsumer 'Cargo.toml'
+    $relocatedMetadata = Invoke-Logged -Command @('cargo', 'metadata', '--offline', '--locked', '--format-version', '1', '--manifest-path', $portableManifest) | ConvertFrom-Json
+    Assert-True ($relocatedMetadata.packages.Count -eq 2) 'Relative Cargo references must resolve after relocating the entire layout.'
+    $relocatedProject = [xml](Get-Content (Join-Path $portableConsumer 'managed' 'Consumer.Presentation.csproj') -Raw)
+    $relocatedManagedDirectory = (Join-Path $portableConsumer 'managed') + [IO.Path]::DirectorySeparatorChar
+    $relocatedRoot = $relocatedProject.Project.PropertyGroup.RustoloniaRoot.InnerText.Replace('$(MSBuildThisFileDirectory)', $relocatedManagedDirectory)
+    Assert-True ([IO.Path]::GetFullPath($relocatedRoot) -eq (Join-Path $movedLayout 'rustolonia')) 'Managed references must remain project-relative after relocation.'
+    foreach ($property in @('AvaloniaProducerRoot', 'RustoloniaRoot')) {
+        Assert-True ($relocatedProject.Project.PropertyGroup.$property.Condition -eq "'`$($property)' == ''") "Explicit $property overrides must not be overwritten."
+    }
+    Assert-True ((Get-FileHash (Join-Path $portableConsumer 'Cargo.lock')).Hash -eq $lockHash) 'Locked metadata must not change the dependency lock.'
+    Set-Content (Join-Path $movedLayout 'rustolonia' 'rust' 'avalonia' 'Cargo.toml') "[package]`nname = `"avalonia`"`nversion = `"0.2.0`"`nedition = `"2021`""
+    Assert-Throws { Invoke-Logged -Command @('cargo', 'metadata', '--offline', '--locked', '--format-version', '1', '--manifest-path', $portableManifest) } 'exit code'
 
     $badManifest = Get-Content -LiteralPath (Join-Path $consumer 'avalonia-app.json') -Raw | ConvertFrom-Json -AsHashtable
     $badManifest.unexpected = $true
@@ -383,11 +455,15 @@ Add-Content -LiteralPath (Join-Path $PSScriptRoot 'signatures.log') -Value $Arti
         Set-Content -LiteralPath (Join-Path $dbusDirectory 'Avalonia.DBus.csproj') -Value '<Project />'
         $failingSigner = Join-Path $scratch 'failing-sign.ps1'
         Set-Content -LiteralPath $failingSigner -Value "throw 'injected signing failure'"
-        function rustup { $nativeTarget.Triple }
+        function rustup { $global:LASTEXITCODE = 0; $nativeTarget.Triple }
         function xcodebuild {}
-        function git { 'deadbeef' }
+        function git {
+            $global:LASTEXITCODE = 0
+            if ($args -contains 'rev-parse') { (Get-Content (Join-Path $root 'rust' 'release-manifest.json') -Raw | ConvertFrom-Json).producerPin }
+        }
         function dotnet {
             $global:LASTEXITCODE = 0
+            if ($args[0] -eq '--version') { return '10.0.400' }
             if ($args -contains '-getProperty:ProjectAssetsFile') { return $mockAssets }
             if ($args[0] -ne 'publish') { return }
             $publishOverride = @($args | Where-Object { $_ -like '-p:PublishDir=*' })
@@ -399,7 +475,12 @@ Add-Content -LiteralPath (Join-Path $PSScriptRoot 'signatures.log') -Value $Arti
         }
         function cargo {
             $global:LASTEXITCODE = 0
-            if ($args[0] -eq 'fmt') { return }
+            if ($args[0] -eq 'fmt') { throw 'Consumer builds must not format handwritten Rust.' }
+            if ($args[0] -eq 'metadata') {
+                Assert-True (($args -contains '--locked') -eq $expectLockedMetadata) 'Only explicit lockfile updates may resolve without --locked.'
+                return (@{ workspace_root = $consumer } | ConvertTo-Json)
+            }
+            if ($args -contains '--bin') { Assert-True ($args -contains '--locked') 'Consumer Cargo builds must be locked.' }
             if ($failureStage -eq 'cargo') { throw 'injected cargo failure' }
             $output = Join-Path $env:CARGO_TARGET_DIR $nativeTarget.Triple 'release'
             $name = 'demo_app'
@@ -432,12 +513,15 @@ Add-Content -LiteralPath (Join-Path $PSScriptRoot 'signatures.log') -Value $Arti
             $mockManifest.outputDirectory = $consumerBundle
             $mockManifestPath = Join-Path $consumer 'mock-build.json'
             $mockManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $mockManifestPath
+            $expectLockedMetadata = $true
             foreach ($failureStage in @('cargo', 'signing')) {
                 Assert-Throws {
                     & (Join-Path $root 'rust' 'package.ps1') -Rid $nativeRid -ProducerRoot $fakeProducer -OutputRoot $sampleOutput
                 } "injected $failureStage failure"
                 Assert-Throws {
                     & (Join-Path $root 'rust' 'build-app.ps1') -ProducerRoot $fakeProducer -Manifest $mockManifestPath -SkipGenerate
+                    $expectLockedMetadata = $false
+                    & (Join-Path $root 'rust' 'build-app.ps1') -ProducerRoot $fakeProducer -Manifest $mockManifestPath -SkipGenerate -UpdateLockFile
                 } "injected $failureStage failure"
                 foreach ($output in @($sampleBundle, $consumerBundle)) {
                     Assert-True ((Get-Content -LiteralPath (Join-Path $output 'previous.bin') -Raw).Trim() -eq 'last good release') "$failureStage failure in a packaging entry point lost the previous bundle."
@@ -510,7 +594,14 @@ version = "0.1.0"
         Assert-True ($source.Count -eq 1 -and $source[0].value -like 'unavailable:*does not exist') 'Missing supplied dependency files must not be reported as available.'
     }
 
-    if ($RunNativeSmoke) { Test-NativeConsumer -Scratch $scratch }
+    if ($RunNativeSmoke) {
+        $nativeScratch = Join-Path ([IO.Path]::GetTempPath()) ('rustolonia-native-' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $nativeScratch | Out-Null
+        try { Test-NativeConsumer -Scratch $nativeScratch }
+        finally {
+            if (Test-Path -LiteralPath $nativeScratch) { Remove-Item -LiteralPath $nativeScratch -Recurse -Force }
+        }
+    }
 }
 finally {
     if (Test-Path -LiteralPath $scratch) { Remove-Item -LiteralPath $scratch -Recurse -Force }

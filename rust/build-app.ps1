@@ -9,7 +9,8 @@ param(
     [Parameter(Mandatory)][string]$Manifest,
     # The rustolonia repository root (defaults to the checkout this script lives in).
     [string]$RustoloniaRoot = (Split-Path -Parent $PSScriptRoot),
-    [switch]$SkipGenerate
+    [switch]$SkipGenerate,
+    [switch]$UpdateLockFile
 )
 
 Set-StrictMode -Version Latest
@@ -87,6 +88,13 @@ function Invoke-ConsumerPackage {
     $rid = [string]$Document.rid
     $target = Get-RidTargetInfo -Rid $rid
     $rustoloniaRootPath = (Resolve-Path -LiteralPath $RustoloniaRoot).Path
+    Assert-ConsumerTools -Rid $rid -RustoloniaRoot $rustoloniaRootPath -ConsumerRoot $Document._manifestDirectory
+    Assert-ConsumerSource -ProducerRoot $ProducerRootPath -RustoloniaRoot $rustoloniaRootPath
+    # Cargo finds the owning workspace lockfile, which may be above the manifest.
+    $metadataCommand = @('cargo', 'metadata', '--format-version', '1', '--manifest-path', $paths.cargoManifest)
+    if (-not $UpdateLockFile) { $metadataCommand += '--locked' }
+    $metadata = Invoke-Logged -WorkingDirectory $Document._manifestDirectory -Command $metadataCommand | ConvertFrom-Json
+    $cargoLockPath = Join-Path $metadata.workspace_root 'Cargo.lock'
     $hostProject = Join-Path $rustoloniaRootPath 'host' 'Avalonia.Host.csproj'
     $projectionTool = Join-Path $rustoloniaRootPath 'projection' 'Avalonia.ViewModelProjection.Tool' 'Avalonia.ViewModelProjection.Tool.csproj'
     $licenseFile = Join-Path $ProducerRootPath 'licence.md'
@@ -106,7 +114,7 @@ function Invoke-ConsumerPackage {
     }
 
     if (-not $SkipGenerate) {
-        Invoke-Logged -WorkingDirectory $ProducerRootPath -Command @(
+        Invoke-Logged -WorkingDirectory $rustoloniaRootPath -Command @(
             'dotnet', 'run', '--project', $projectionTool, '-c', [string]$Document.configuration, '--',
             $paths.viewModelIr, $paths.generatedAdaptersDirectory, (Split-Path -Parent $paths.generatedRegistryFile),
             $paths.generatedRustFile, $paths.generatedContractFile, '--external-rust'
@@ -115,8 +123,7 @@ function Invoke-ConsumerPackage {
 
     Ensure-RidPrerequisites -Rid $rid -ProducerRoot $ProducerRootPath -Configuration ([string]$Document.configuration)
 
-    Invoke-Logged -Command @('cargo', 'fmt', '--manifest-path', $paths.cargoManifest)
-    Invoke-Logged -Command @(
+    Invoke-Logged -WorkingDirectory $Document._manifestDirectory -Command @(
         'dotnet', 'build', $paths.presentationProject, '-c', [string]$Document.configuration,
         "-p:AvaloniaProducerRoot=$ProducerRootPath",
         "-p:RustoloniaRoot=$rustoloniaRootPath"
@@ -128,8 +135,9 @@ function Invoke-ConsumerPackage {
     Set-WindowsStaticCrt -Triple $target.Triple
     try {
         $cargoArgs = New-CargoBuildCommand -ManifestPath $paths.cargoManifest -PackageName $Document.packageName -BinaryName $Document.binary -TargetTriple $target.Triple -Configuration $Document.configuration
+        $cargoArgs += '--locked'
         $profile = if ($Document.configuration -eq 'Release') { 'release' } else { 'debug' }
-        Invoke-Logged -Command $cargoArgs
+        Invoke-Logged -WorkingDirectory $Document._manifestDirectory -Command $cargoArgs
     }
     finally {
         if ($null -eq $previousCargo) { Remove-Item Env:CARGO_TARGET_DIR -ErrorAction SilentlyContinue }
@@ -150,8 +158,12 @@ function Invoke-ConsumerPackage {
             "-p:PublishDir=$staging"
         )
         $publishCommand = @('dotnet', 'publish', $hostProject, '-c', [string]$Document.configuration, '-r', $rid) + $publishProperties
-        Invoke-Logged -WorkingDirectory $ProducerRootPath -Command $publishCommand
-        $consumerHostAssets = Get-PublishedProjectAssetsFile -Project $hostProject -Configuration $Document.configuration -Rid $rid -AdditionalProperties $publishProperties
+        Invoke-Logged -WorkingDirectory $rustoloniaRootPath -Command $publishCommand
+        Push-Location $rustoloniaRootPath
+        try {
+            $consumerHostAssets = Get-PublishedProjectAssetsFile -Project $hostProject -Configuration $Document.configuration -Rid $rid -AdditionalProperties $publishProperties
+        }
+        finally { Pop-Location }
         $hostFile = Join-Path $staging "Avalonia.Host$($target.HostExtension)"
         if (-not (Test-Path -LiteralPath $hostFile -PathType Leaf)) {
             throw "NativeAOT host was not produced: $hostFile"
@@ -168,7 +180,7 @@ function Invoke-ConsumerPackage {
         Invoke-ArtifactSigning -ArtifactDirectory $bundle -SignCommand $env:AVALONIA_RUST_SIGN_COMMAND -ExplicitFiles $signTargets
         $consumerProducerPin = git -C $ProducerRootPath rev-parse HEAD 2>$null
         & (Join-Path $PSScriptRoot 'generate-sbom.ps1') -Rid $rid -Bundle $bundle `
-            -CargoLockPath (Split-Path -Parent $paths.cargoManifest | Join-Path -ChildPath 'Cargo.lock') `
+            -CargoLockPath $cargoLockPath `
             -ProjectAssetsJsonPath $consumerHostAssets `
             -ProducerPin $consumerProducerPin
         Write-Checksums -Bundle $bundle

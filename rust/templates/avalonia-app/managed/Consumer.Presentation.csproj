@@ -9,11 +9,10 @@
     <!--
       Two roots: the Avalonia producer (framework sources, XAML build tasks) and
       the rustolonia repository (interop libraries, build configuration). Both
-      are substituted by new-app.ps1 from the -ProducerRoot and the rustolonia
-      checkout the template was instantiated from.
+      are relative to this project; explicit MSBuild properties override them.
     -->
-    <AvaloniaProducerRoot Condition="'$(AvaloniaProducerRoot)' == ''">__AVALONIA_PRODUCER_ROOT__</AvaloniaProducerRoot>
-    <RustoloniaRoot Condition="'$(RustoloniaRoot)' == ''">__RUSTOLONIA_ROOT__</RustoloniaRoot>
+    <AvaloniaProducerRoot Condition="'$(AvaloniaProducerRoot)' == ''">__MANAGED_PRODUCER_ROOT__</AvaloniaProducerRoot>
+    <RustoloniaRoot Condition="'$(RustoloniaRoot)' == ''">__MANAGED_RUSTOLONIA_ROOT__</RustoloniaRoot>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="$(AvaloniaProducerRoot)\packages\Avalonia\Avalonia.csproj" />
