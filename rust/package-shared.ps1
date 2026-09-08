@@ -245,16 +245,50 @@ function Assert-ConsumerSource {
         if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $patch.sha256) {
             throw "Producer patch hash mismatch: $path"
         }
-        $PSNativeCommandUseErrorActionPreference = $false
-        & git -C $ProducerRoot apply --reverse --check $path 2>$null
-        if ($LASTEXITCODE -ne 0) {
-            throw "Producer patch is missing or modified: $path. Run avalonia-patches/apply-avalonia-patches.ps1 -AvaloniaRoot `"$ProducerRoot`"."
+    }
+
+    $previousIndex = $env:GIT_INDEX_FILE
+    $expectedIndex = [IO.Path]::GetTempFileName()
+    $actualIndex = [IO.Path]::GetTempFileName()
+    Remove-Item -LiteralPath $expectedIndex, $actualIndex
+    try {
+        $env:GIT_INDEX_FILE = $expectedIndex
+        & git -C $ProducerRoot read-tree HEAD
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot initialize the expected producer tree.' }
+        foreach ($patch in $release.patches) {
+            $path = Join-Path $RustoloniaRoot $patch.path
+            & git -C $ProducerRoot apply --cached --whitespace=nowarn $path
+            if ($LASTEXITCODE -ne 0) { throw "Cannot construct the expected producer tree from patch: $path" }
+        }
+        $expectedTree = & git -C $ProducerRoot write-tree
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot record the expected producer tree.' }
+
+        $env:GIT_INDEX_FILE = $actualIndex
+        & git -C $ProducerRoot read-tree HEAD
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot initialize the actual producer tree.' }
+        & git -C $ProducerRoot add --all
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect producer source changes.' }
+        $actualTree = & git -C $ProducerRoot write-tree
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot record the actual producer tree.' }
+        if ($actualTree -ne $expectedTree) {
+            throw 'Producer source contains changes beyond the declared Rustolonia patches. Restore the pinned producer and reapply the declared patches.'
         }
     }
+    finally {
+        if ($null -eq $previousIndex) { Remove-Item Env:GIT_INDEX_FILE -ErrorAction SilentlyContinue }
+        else { $env:GIT_INDEX_FILE = $previousIndex }
+        Remove-Item -LiteralPath $expectedIndex, "$expectedIndex.lock", $actualIndex, "$actualIndex.lock" -Force -ErrorAction SilentlyContinue
+    }
+
     $submodules = & git -C $ProducerRoot submodule status --recursive
     if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect producer submodule revisions.' }
     if (@($submodules | Where-Object { $_ -match '^[-+U]' }).Count -gt 0) {
         throw "Producer submodules are missing or at the wrong revision. Run: git -C `"$ProducerRoot`" submodule update --init --recursive"
+    }
+    $dirtySubmodules = & git -C $ProducerRoot submodule foreach --recursive --quiet 'if test -n "$(git status --porcelain --untracked-files=all)"; then printf "%s\n" "$displaypath"; fi'
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect producer submodule worktrees.' }
+    if (@($dirtySubmodules).Count -gt 0) {
+        throw "Producer submodules contain local changes: $($dirtySubmodules -join ', '). Restore them to their pinned revisions."
     }
 }
 

@@ -344,6 +344,7 @@ Add-Content -LiteralPath (Join-Path $PSScriptRoot 'signatures.log') -Value $Arti
     & {
         $release = Get-Content (Join-Path $root 'rust' 'release-manifest.json') -Raw | ConvertFrom-Json
         $sourceCase = 'valid'
+        $treeWrites = @{ Value = 0 }
         function git {
             $global:LASTEXITCODE = 0
             if ($args -contains 'rev-parse') {
@@ -351,15 +352,24 @@ Add-Content -LiteralPath (Join-Path $PSScriptRoot 'signatures.log') -Value $Arti
                 return $release.producerPin
             }
             if ($args -contains 'apply' -and $sourceCase -eq 'patch') { $global:LASTEXITCODE = 1 }
+            if ($args -contains 'write-tree') {
+                $treeWrites.Value++
+                if ($sourceCase -eq 'source' -and $treeWrites.Value % 2 -eq 0) { return 'unexpected-tree' }
+                return 'expected-tree'
+            }
             if ($args -contains 'submodule' -and $sourceCase -eq 'submodule') { return '-012345 external/missing' }
+            if ($args -contains 'foreach' -and $sourceCase -eq 'dirty-submodule') { return 'external/dirty' }
         }
         Assert-ConsumerSource -ProducerRoot $fakeProducer -RustoloniaRoot $root
         foreach ($case in @(
                 @{ Name = 'revision'; Error = 'Producer revision must be' },
-                @{ Name = 'patch'; Error = 'patch is missing or modified' },
-                @{ Name = 'submodule'; Error = 'submodules are missing or at the wrong revision' }
+                @{ Name = 'patch'; Error = 'Cannot construct the expected producer tree' },
+                @{ Name = 'source'; Error = 'changes beyond the declared Rustolonia patches' },
+                @{ Name = 'submodule'; Error = 'submodules are missing or at the wrong revision' },
+                @{ Name = 'dirty-submodule'; Error = 'submodules contain local changes' }
             )) {
             $sourceCase = $case.Name
+            $treeWrites.Value = 0
             Assert-Throws { Assert-ConsumerSource -ProducerRoot $fakeProducer -RustoloniaRoot $root } $case.Error
         }
         $sourceCase = 'valid'
