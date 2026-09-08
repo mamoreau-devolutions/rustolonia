@@ -27,7 +27,7 @@ package rename:
 ```
 
 ```bash
-pwsh ./rust/new-app.ps1 my_app ~/src/my_app
+pwsh ./rust/new-app.ps1 -Name my_app -Destination ~/src/my_app
 ```
 
 The template is excluded from the `rust` Cargo workspace (see the `exclude`
@@ -37,8 +37,15 @@ Windows/Linux/macOS file type association metadata in `file-associations/`, and
 a `main.rs` that already surfaces startup "open with" documents through
 `AppScope::activation_items()` (see
 [DESKTOP_FILES.md](DESKTOP_FILES.md#file-type-associations)). `new-app`
-substitutes both the Cargo package name and the pinned producer-root
-placeholder throughout, including those snippets. Commit the producer as a
+substitutes the Cargo package name and separate Rustolonia/producer roots,
+including those snippets. Cargo paths are consumer-relative and managed roots
+are anchored to the presentation project directory. Moving the entire layout
+preserves these references; roots on different volumes retain absolute paths
+with a warning. Explicit MSBuild root overrides remain supported; update Cargo
+paths too when deliberately changing the layout.
+The scaffold copies Rustolonia's supported `global.json` policy and defaults the
+manifest RID/output directory to the current OS/architecture (`-Rid` overrides
+this). Commit Rustolonia and the producer as a
 submodule (or pin a checkout to an immutable commit); do not point a release
 consumer at an unpinned branch.
 Initialize the pinned producer recursively before generation or publishing:
@@ -63,18 +70,36 @@ configuration, and output directory; `binary` optionally selects a normal
 Cargo binary and defaults to `packageName`.
 
 ```powershell
-& .\rustolonia\rust\build-app.ps1 -ProducerRoot .\rustolonia\avalonia-src `
-  -Manifest .\consumer\avalonia-app.json
+pwsh .\rustolonia\rust\build-app.ps1 -ProducerRoot .\rustolonia\avalonia-src `
+  -Manifest .\consumer\avalonia-app.json -UpdateLockFile
 ```
 
 The cross-platform `build-app.ps1` (PowerShell 7) validates the
-manifest and paths before it runs Rustolonia's
+manifest and paths, then checks the producer HEAD against `release-manifest.json`,
+patch file hashes and applied patch content, and recursive submodule revisions.
+Apply patches explicitly with `avalonia-patches/apply-avalonia-patches.ps1`;
+preflight never modifies or downloads source/tool prerequisites.
+It requires the supported .NET SDK (respecting `global.json` feature-band roll
+forward), Cargo/Rust/rustup, the RID's installed Rust target and native tools:
+Visual Studio C++ plus Windows SDK on Windows, clang/cc/binutils/pkg-config and
+zlib development files on Linux, or Xcode on macOS. Packaging remains same-OS,
+with cross-architecture builds requiring their target toolchains.
+
+On first build, `-UpdateLockFile` explicitly permits Cargo metadata resolution
+to create/update the workspace `Cargo.lock`. Commit that lockfile and
+`global.json`; omit the switch for subsequent builds. Metadata resolution and
+the actual Cargo build are then both locked, so missing/stale lockfiles fail
+before generation. Compatible existing pins are retained during resolution;
+upgrading dependencies is a separate deliberate Cargo operation.
+
+After preflight it runs Rustolonia's
 `Avalonia.ViewModelProjection.Tool` against consumer outputs. It then runs
-`cargo fmt`, builds consumer AXAML, builds the declared Cargo `--bin`, and
+the consumer AXAML build, builds the declared Cargo `--bin --locked`, and
 publishes `Avalonia.Host` with
 `AvaloniaRustPresentationProjects` and `AvaloniaRustViewRegistryFile`.
 The external ProjectReference and linked generated registry are therefore
 compiled statically into NativeAOT; no application-specific ABI is introduced.
+Normal consumer builds never run `cargo fmt` or rewrite handwritten Rust.
 External Rust output uses a crate-root compatibility bridge. Consumers must
 re-export `DynamicViewModel`, `ViewModelSink`, `ViewModelBatch`, and
 `BatchCompletion` from `avalonia::view_model`; the shipped template already
@@ -85,6 +110,11 @@ executable, the producer's `licence.md`, Rustolonia's `LICENSE` and
 checksums to the manifest's adjacent output directory. A local
 `AVALONIA_RUST_SIGN_COMMAND` wrapper may sign final binaries before SBOM and
 checksums; it is never downloaded or shell-expanded.
+The optional `noticeFiles` manifest array adds application-specific license or
+notice files to that bundle before its SBOM and checksums are generated. Entries
+must be relative files contained beneath the manifest directory, cannot traverse
+symbolic links or reparse points, and must have case-insensitively distinct,
+non-reserved basenames.
 
 Both packaging entrypoints share `package-shared.ps1`: target mappings, native
 preparation, command construction, native-library copying, signing and checksums.

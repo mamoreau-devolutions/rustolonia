@@ -7,11 +7,15 @@ param(
     [Parameter(Mandatory)]
     [string]$Destination,
     [string]$ProducerRoot,
+    [string]$Rid,
     [string]$RustoloniaRoot = (Split-Path -Parent $PSScriptRoot)
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'package-shared.ps1')
+if ([string]::IsNullOrWhiteSpace($Rid)) { $Rid = Get-DefaultConsumerRid }
+$null = Get-RidTargetInfo -Rid $Rid
 
 $templateDir = Join-Path $PSScriptRoot 'templates' 'avalonia-app'
 if (-not (Test-Path -LiteralPath $templateDir -PathType Container)) {
@@ -48,6 +52,16 @@ if (Test-Path -LiteralPath $resolvedDestination -PathType Any) {
 
 $producerDisplayPath = $resolvedProducerRoot.Replace('\', '/')
 $rustoloniaDisplayPath = $resolvedRustoloniaRoot.Replace('\', '/')
+$relativeRustolonia = [IO.Path]::GetRelativePath($resolvedDestination, $resolvedRustoloniaRoot).Replace('\', '/')
+$relativeProducer = [IO.Path]::GetRelativePath($resolvedDestination, $resolvedProducerRoot).Replace('\', '/')
+$managedDirectory = Join-Path $resolvedDestination 'managed'
+$managedRustolonia = [IO.Path]::GetRelativePath($managedDirectory, $resolvedRustoloniaRoot).Replace('\', '/')
+$managedProducer = [IO.Path]::GetRelativePath($managedDirectory, $resolvedProducerRoot).Replace('\', '/')
+if (-not [IO.Path]::IsPathRooted($managedRustolonia)) { $managedRustolonia = '$(MSBuildThisFileDirectory)' + $managedRustolonia }
+if (-not [IO.Path]::IsPathRooted($managedProducer)) { $managedProducer = '$(MSBuildThisFileDirectory)' + $managedProducer }
+if ([IO.Path]::IsPathRooted($relativeRustolonia) -or [IO.Path]::IsPathRooted($relativeProducer)) {
+    Write-Warning 'Roots are on different volumes; generated references are absolute. Keep consumer and source checkouts on one volume for relocation.'
+}
 $manifestDisplayPath = (Join-Path $resolvedDestination 'avalonia-app.json').Replace('\', '/')
 $buildAppPath = Join-Path $resolvedRustoloniaRoot 'rust' 'build-app.ps1'
 $buildCommand = @(
@@ -56,7 +70,8 @@ $buildCommand = @(
     '-ProducerRoot',
     ('"{0}"' -f $producerDisplayPath),
     '-Manifest',
-    ('"{0}"' -f $manifestDisplayPath)
+    ('"{0}"' -f $manifestDisplayPath),
+    '-UpdateLockFile'
 ) -join ' '
 $tempDestination = Join-Path $destinationParent ('.' + [System.IO.Path]::GetFileName($resolvedDestination) + '.tmp-' + [guid]::NewGuid().ToString('N'))
 
@@ -68,10 +83,14 @@ try {
     foreach ($item in $items) {
         $content = Get-Content -LiteralPath $item.FullName -Raw
         $content = $content.Replace('__AVALONIA_APP_NAME__', $Name)
-        $content = $content.Replace('__AVALONIA_PRODUCER_ROOT__', $producerDisplayPath)
-        $content = $content.Replace('__RUSTOLONIA_ROOT__', $rustoloniaDisplayPath)
+        $content = $content.Replace('__AVALONIA_PRODUCER_ROOT__', $relativeProducer)
+        $content = $content.Replace('__RUSTOLONIA_ROOT__', $relativeRustolonia)
+        $content = $content.Replace('__MANAGED_PRODUCER_ROOT__', [Security.SecurityElement]::Escape($managedProducer))
+        $content = $content.Replace('__MANAGED_RUSTOLONIA_ROOT__', [Security.SecurityElement]::Escape($managedRustolonia))
+        $content = $content.Replace('__CONSUMER_RID__', $Rid)
         Set-Content -LiteralPath $item.FullName -Value $content -NoNewline
     }
+    Copy-Item -LiteralPath (Join-Path $resolvedRustoloniaRoot 'global.json') -Destination (Join-Path $tempDestination 'global.json')
 
     $gitIgnorePath = Join-Path $tempDestination '.gitignore'
     @(

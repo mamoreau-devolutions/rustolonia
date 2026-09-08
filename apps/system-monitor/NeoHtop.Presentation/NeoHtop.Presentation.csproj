@@ -6,14 +6,12 @@
     <IsPackable>false</IsPackable>
     <IsAotCompatible>true</IsAotCompatible>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-    <!--
-      Two roots: the Avalonia producer (framework sources, XAML build tasks) and
-      the rustolonia repository (interop libraries, build configuration). Both
-      are relative to this project; explicit MSBuild properties override them.
-    -->
-    <AvaloniaProducerRoot Condition="'$(AvaloniaProducerRoot)' == ''">__MANAGED_PRODUCER_ROOT__</AvaloniaProducerRoot>
-    <RustoloniaRoot Condition="'$(RustoloniaRoot)' == ''">__MANAGED_RUSTOLONIA_ROOT__</RustoloniaRoot>
+    <RustoloniaRoot Condition="'$(RustoloniaRoot)' == ''">$(MSBuildThisFileDirectory)..\..\..</RustoloniaRoot>
+    <AvaloniaProducerRoot Condition="'$(AvaloniaProducerRoot)' == ''">$(RustoloniaRoot)\avalonia-src</AvaloniaProducerRoot>
   </PropertyGroup>
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="$(AvaloniaProducerRoot)\packages\Avalonia\Avalonia.csproj" />
     <ProjectReference Include="$(RustoloniaRoot)\interop\Avalonia.Rust\Avalonia.Rust.csproj" />

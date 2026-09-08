@@ -32,6 +32,11 @@ jobs:
   release-gate:
     name: ${{ matrix.rid }}
     runs-on: ${{ matrix.os }}
+    env:
+      # Keep the producer's package-source names and source mapping paired.
+      # Windows runners otherwise contribute a nuget.org alias for the same URL,
+      # which can supersede api.nuget.org while remaining unmapped.
+      RestoreConfigFile: ${{ github.workspace }}/avalonia-src/NuGet.Config
     strategy:
       fail-fast: false
       matrix:
@@ -159,6 +164,40 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo build --manifest-path rust/Cargo.toml -p avalonia --example rust_dynamic_vm_axaml --release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Test in-repository system monitor
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        working-directory: apps/system-monitor
+        run: cargo test --locked --manifest-path NeoHtop.App/Cargo.toml
+
+      - name: Build in-repository system monitor
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: ./apps/system-monitor/build.ps1
+
+      - name: Verify system monitor bundle and generated sources
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          git diff --exit-code -- apps/system-monitor
+          $bundle = 'apps/system-monitor/artifacts/win-x64'
+          if (-not (Test-Path -LiteralPath "$bundle/.rustolonia-bundle-owner")) {
+            throw 'Bundle ownership marker is missing.'
+          }
+          Get-Content -LiteralPath "$bundle/checksums.sha256" | ForEach-Object {
+            $expected, $file = $_ -split '\s+\*', 2
+            $actual = (Get-FileHash -LiteralPath (Join-Path $bundle $file) -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $expected) { throw "Checksum mismatch for $file" }
+          }
+          tar -czf apps/system-monitor/artifacts/win-x64.tar.gz -C $bundle .
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.rid == 'win-x64'
+        with:
+          name: rustolonia-system-monitor-win-x64
+          path: apps/system-monitor/artifacts/win-x64.tar.gz
+          if-no-files-found: error
 
       - name: Package NativeAOT sample artifacts
         shell: pwsh

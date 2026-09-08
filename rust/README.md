@@ -248,23 +248,30 @@ examples use:
 ```
 
 ```bash
-pwsh ./rust/new-app.ps1 my_app ~/src/my_app
+pwsh ./rust/new-app.ps1 -Name my_app -Destination ~/src/my_app
 ```
 
 The scaffold is an external consumer with managed AXAML and view-model IR, not
-an in-repository sample. Pin the producer checkout (prefer a Git submodule) to
-the commit which supplies the Rust crates and host, then build it in one step:
+an in-repository sample. Pin Rustolonia (Rust crates and host) and initialize its
+separate Avalonia producer submodule recursively, then apply the carried patches.
+From the Rustolonia repository root, build the new app in one step:
 
 ```powershell
-& .\producer\rust\build-app.ps1 -ProducerRoot .\producer `
-  -Manifest .\my_app\avalonia-app.json
+pwsh .\rust\build-app.ps1 -ProducerRoot .\avalonia-src `
+  -Manifest .\my_app\avalonia-app.json -UpdateLockFile
 ```
 
 The manifest selects the managed presentation project, IR, Cargo package and
 normal binary, RID, configuration, and adjacent output directory. The tool
-generates consumer adapters/registry/Rust API, then formats and builds Cargo,
+checks source pins, patches and tool prerequisites, generates consumer
+adapters/registry/Rust API, then builds Cargo with `--locked`,
 builds AXAML, publishes a NativeAOT host with those exact external inputs, and
 creates a checksummed CycloneDX bundle. See [PRODUCTIZATION.md](PRODUCTIZATION.md).
+
+Commit the generated `global.json` and resolved `Cargo.lock`, then omit
+`-UpdateLockFile` for normal builds. Formatting handwritten Rust is a separate,
+explicit `cargo fmt` operation. Scaffold roots are relative (when on the same
+volume) and the default RID matches the current OS and architecture.
 
 `Avalonia.Host`, `Avalonia.Rust`, `Avalonia.Rust.Interop`, and the projection
 tool/generator projects are currently non-packable, and the `rust/*` crates
