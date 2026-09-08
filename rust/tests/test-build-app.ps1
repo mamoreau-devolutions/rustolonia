@@ -651,7 +651,14 @@ version = "0.1.0"
     }
 
     if ($RunNativeSmoke) {
-        $nativeScratch = Join-Path ([IO.Path]::GetTempPath()) ('rustolonia-native-' + [guid]::NewGuid().ToString('N'))
+        $nativeTempRoot = [IO.Path]::GetTempPath()
+        if ($IsMacOS) {
+            # /var is a symlink to /private/var. MSBuild canonicalizes the project
+            # directory before resolving references, so create the external smoke
+            # consumer under the physical path as well.
+            $nativeTempRoot = (& /usr/bin/realpath $nativeTempRoot).Trim()
+        }
+        $nativeScratch = Join-Path $nativeTempRoot ('rustolonia-native-' + [guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $nativeScratch | Out-Null
         try { Test-NativeConsumer -Scratch $nativeScratch }
         finally {
