@@ -4,6 +4,7 @@
   </Folder>
   <Folder Name="/apps/">
     <Project Path="apps/system-monitor/NeoHtop.Presentation/NeoHtop.Presentation.csproj" />
+    <Project Path="apps/pdf-viewer/managed/Consumer.Presentation.csproj" />
   </Folder>
   <Folder Name="/interop/">
     <Project Path="interop/Avalonia.Rust.Interop/Avalonia.Rust.Interop.csproj" />

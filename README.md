@@ -17,6 +17,7 @@ pinned `avalonia-src` producer submodule at commit
 | `projection/` | The projection pipeline: IR extraction, C#/header emitters, and the generator tools |
 | `interop/` | `Avalonia.Rust` and `Avalonia.Rust.Interop` - the managed-side view-model interop layer |
 | `apps/system-monitor/` | NeoHtop, a real Rust-owned system monitor with compiled AXAML presentation and a packaged NativeAOT host |
+| `apps/pdf-viewer/` | A PDF Oxide-powered sample viewer with rendered page navigation and extracted text |
 | `tests/` | Host, IR, and generator test suites |
 | `samples/` | `RustViewModelSample.Managed` - the sample presentation project the host consumes |
 | `build/` | Vendored MSBuild configuration (versioning, signing, analyzers, xunit) |
